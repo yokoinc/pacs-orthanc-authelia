@@ -33,9 +33,13 @@ services:
   # =============================================================================
   
   auth-service:
-    image: registry.yokoinc.ovh/pacs-auth-service:1.0.0
+    build:
+      context: ./services/auth-service
+      dockerfile: Dockerfile
     container_name: pacs-auth-service
     restart: unless-stopped
+    volumes:
+      - ./services/auth-service/auth_service.py:/app/auth_service.py:ro  # Mount Python file directly
     networks:
       - orthanc-network                 # Custom authentication service
 

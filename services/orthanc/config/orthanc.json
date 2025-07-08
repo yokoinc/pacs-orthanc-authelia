@@ -31,7 +31,7 @@
   // =============================================================================
   "MaximumStorageSize": 0,                     // No storage limit (0 = unlimited)
   "MaximumPatientCount": 0,                    // No patient limit (0 = unlimited)
-  "StorageCompression": true,                  // Enable DICOM compression for storage efficiency
+  "StorageCompression": false,                 // Disable DICOM compression for better performance
 
   // =============================================================================
   // POSTGRESQL DATABASE CONFIGURATION
@@ -102,22 +102,48 @@
       "ShowOrthancName": true,                 // Display server name in UI
       "EnableViewerQuickButton": true,         // Quick access to viewers
       "ViewersOrdering": [                     // Viewer priority order
-        "stone-webviewer",                     // 1. Stone (fastest)
-        "ohif",                                // 2. OHIF (most features)
-        "volview"                              // 3. VolView (3D)
+        "ohif",                                // OHIF viewer
+        "stone-webviewer",                     // Stone Web Viewer
+        "volview"                              // VolView 3D viewer
       ],
       
       // Viewer integration URLs
       "OhifViewer3PublicRoot": "/ohif/",       // OHIF viewer URL
-      "VolViewPublicRoot": "/volview/",        // VolView viewer URL
-      "StoneWebViewerPublicRoot": "/stone-webviewer/", // Stone viewer URL
+      "StoneWebViewerPublicRoot": "/stone-webviewer/",  // Stone Web Viewer URL
+      "VolViewPublicRoot": "/volview/",         // VolView 3D viewer URL
       
       // Enable viewer integrations
       "EnableOpenInOhifViewer3": true,         // Enable OHIF integration
-      "EnableOpenInVolviewViewer": true,       // Enable VolView integration
+      "EnableOpenInStoneWebViewer": true,      // Enable Stone Web Viewer integration
+      "EnableOpenInVolView": true,             // Enable VolView integration
       
-      // Study list configuration for medical workflow
-      "StudyListColumns": [
+      // External sharing configuration
+      "EnableShares": true                     // Enable external sharing functionality
+    },
+    
+    // Reports integration with OHIF
+    "EnableReportQuickButton": true,         // Quick access to reports in study view
+    
+    // Share link configuration
+    "ShareDurations": [7, 15, 30, 90],       // Available share durations in days
+    "DefaultShareDuration": 7,               // Default duration: 7 days
+    "DefaultShareType": "ohif-viewer-publication",  // Force OHIF as default share type
+    
+    // Tokens configuration
+    "Tokens": {
+      "ShareType": "ohif-viewer-publication",   // Force OHIF for sharing
+      "LandingOptions": [
+        {
+          "Type": "open-viewer-button"         // Button to open viewer
+        },
+        {
+          "Type": "download-study"             // Download study option
+        }
+      ]
+    },
+    
+    // Study list configuration for medical workflow
+    "StudyListColumns": [
         "PatientID",                           // Patient identifier
         "PatientName",                         // Patient name
         "StudyDate",                           // Study date
@@ -126,7 +152,6 @@
         "InstitutionName",                     // Institution name
         "Modality"                             // Imaging modality (CT, MR, etc.)
       ]
-    }
   },
 
   // =============================================================================
@@ -134,17 +159,24 @@
   // =============================================================================
   // Integration with custom authentication service
   "Authorization": {
-    "Enabled": true,                           // Enable authorization
-    "Endpoint": "http://auth-service:8000",    // Auth service endpoint
-    "TokenValidationUrl": "http://auth-service:8000/tokens/validate",  // Token validation
-    "UserProfileUrl": "http://auth-service:8000/user/profile",         // User profile
-    "TokenCreationUrl": "http://auth-service:8000/tokens/",            // Token creation
-    "SettingsRolesUrl": "http://auth-service:8000/settings/roles",     // Role settings
-    "CheckedLevel": "studies",                 // Authorization level
-    "Username": "share-user",                  // Service username
-    "Password": "change-me",                   // Service password (change in production)
-    "VerifySsl": false,                        // SSL verification (internal network)
-    "RequestTimeout": 5                        // Request timeout in seconds
+    "CheckedLevel": "studies",                                        // Authorization level
+    "UncheckedFolders": [
+      "/ui",                                                         // Allow access to Orthanc Explorer 2 (auth handled by nginx)
+      "/favicon.ico"                                                 // Allow favicon access
+    ],
+    "TokenHttpHeaders": ["X-Auth-User", "Remote-User", "auth-token"], // Headers containing user info from nginx
+    "WebServiceRootUrl": "http://auth-service:8000",                 // Root URL for auth-service
+    "WebServiceTokenValidationUrl": "http://auth-service:8000/tokens/validate",  // Token validation
+    "WebServiceUserProfileUrl": "http://auth-service:8000/user/get-profile",      // User profile
+    "WebServiceTokenCreationBaseUrl": "http://auth-service:8000/tokens/",        // Token creation
+    "WebServiceUsername": "share-user",                              // Service username
+    "WebServicePassword": "change-me",                                // Service password (change in production)
+    "StandardConfigurations": [
+      "orthanc-explorer-2",
+      "ohif",
+      "stone-webviewer",
+      "volview"
+    ]
   },
 
   // =============================================================================

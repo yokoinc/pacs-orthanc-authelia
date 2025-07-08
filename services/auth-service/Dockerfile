@@ -3,7 +3,7 @@ FROM python:3.11-slim
 WORKDIR /app
 
 # Installer les dépendances nécessaires
-RUN pip install --no-cache-dir fastapi uvicorn
+RUN pip install --no-cache-dir fastapi uvicorn redis
 
 # Copier le fichier principal uniquement
 COPY auth_service.py /app/
