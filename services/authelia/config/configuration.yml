@@ -1,0 +1,96 @@
+---
+# Configuration Authelia pour Orthanc PACS
+theme: auto
+
+server:
+  address: "tcp://0.0.0.0:9091"
+  disable_healthcheck: false
+  tls:
+    certificate: ""
+    key: ""
+
+log:
+  level: info
+
+totp:
+  issuer: Orthanc PACS
+
+# Base de données pour les utilisateurs (simple fichier)
+authentication_backend:
+  file:
+    path: /config/users_database.yml
+    password:
+      algorithm: argon2id
+      iterations: 1
+      salt_length: 16
+      parallelism: 8
+      memory: 128
+    search:
+      email: true
+      case_insensitive: true
+
+# Désactiver le changement de mot de passe
+password_policy:
+  standard:
+    enabled: false
+  zxcvbn:
+    enabled: false
+
+# Configuration des accès
+access_control:
+  default_policy: deny
+  
+  rules:
+    # Admin a accès à tout
+    - domain: pacs.yokoinc.ovh
+      policy: one_factor
+      subject: "group:admin"
+      
+    # Doctors ont accès limité
+    - domain: pacs.yokoinc.ovh
+      policy: one_factor
+      subject: "group:doctor"
+      
+    # External ont accès très limité
+    - domain: pacs.yokoinc.ovh
+      policy: one_factor
+      subject: "group:external"
+
+session:
+  name: authelia_session
+  same_site: lax
+  expiration: 1h
+  inactivity: 15m
+  remember_me: 8h
+  secret: "another_very_important_secret_for_sessions_123456789"
+  cookies:
+    - domain: pacs.yokoinc.ovh
+      authelia_url: https://pacs.yokoinc.ovh/auth
+      default_redirection_url: https://pacs.yokoinc.ovh/
+      same_site: lax
+  redis:
+    host: redis
+    port: 6379
+    database_index: 0
+
+regulation:
+  max_retries: 5
+  find_time: 2m
+  ban_time: 5m
+
+# JWT secret maintenant dans identity_validation.reset_password.jwt_secret
+
+storage:
+  encryption_key: "a_very_important_encryption_key_that_should_be_changed_123456789"
+  local:
+    path: /config/db.sqlite3
+
+# Configuration de validation d'identité
+identity_validation:
+  reset_password:
+    jwt_secret: "a_very_important_secret_that_should_be_changed_in_production_123456789"
+
+notifier:
+  disable_startup_check: true
+  filesystem:
+    filename: /config/notification.txt

@@ -1,0 +1,43 @@
+/* Thème dark personnalisé pour Authelia */
+
+/* Override des styles Authelia */
+body {
+  background-color: #1e242a !important;
+  color: #ffffff !important;
+}
+
+.theme-light body,
+.theme-dark body,
+.theme-auto body {
+  background-color: #1e242a !important;
+  color: #ffffff !important;
+}
+
+/* Couleurs principales */
+.MuiPaper-root {
+  background-color: #2a313a !important;
+  color: #ffffff !important;
+}
+
+.MuiButton-containedPrimary {
+  background-color: #6ea0c8 !important;
+}
+
+.MuiButton-containedSecondary {
+  background-color: #d19b3c !important;
+}
+
+/* Inputs */
+.MuiInputBase-root {
+  background-color: #1e242a !important;
+  color: #ffffff !important;
+}
+
+.MuiOutlinedInput-notchedOutline {
+  border-color: #3a414a !important;
+}
+
+/* Force dark theme partout */
+* {
+  color-scheme: dark !important;
+}

@@ -1,0 +1,88 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: pacs-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: orthanc
+      POSTGRES_USER: orthanc
+      POSTGRES_PASSWORD: orthanc_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - orthanc-network
+
+  auth-service:
+    image: registry.yokoinc.ovh/pacs-auth-service:1.0.0
+    container_name: pacs-auth-service
+    restart: unless-stopped
+    networks:
+      - orthanc-network
+
+  redis:
+    image: redis:alpine
+    container_name: pacs-redis
+    restart: unless-stopped
+    networks:
+      - orthanc-network
+
+  authelia:
+    image: authelia/authelia:4.38.8
+    container_name: pacs-authelia
+    restart: unless-stopped
+    depends_on:
+      - redis
+    volumes:
+      - ./services/authelia/config:/config
+    networks:
+      - orthanc-network
+    environment:
+      - TZ=Europe/Paris
+
+  orthanc:
+    image: jodogne/orthanc-plugins:latest
+    container_name: pacs-orthanc
+    restart: unless-stopped
+    depends_on:
+      - postgres
+      - auth-service
+    volumes:
+      - ./services/orthanc/config/orthanc.json:/etc/orthanc/orthanc.json:ro
+    networks:
+      - orthanc-network
+
+  nginx:
+    image: nginx:alpine
+    container_name: pacs-nginx
+    restart: unless-stopped
+    ports:
+      - "30080:80"
+    volumes:
+      - ./reverse-proxy/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./reverse-proxy/conf.d:/etc/nginx/conf.d:ro
+    depends_on:
+      - orthanc
+      - ohif
+    networks:
+      - orthanc-network
+
+  ohif:
+    image: registry.yokoinc.ovh/pacs-ohif:3.10.2
+    container_name: pacs-ohif
+    restart: unless-stopped
+    environment:
+      - PUBLIC_URL=/ohif/
+      - HTTPS=true
+    volumes:
+      - ./services/ohif/config/app-config.js:/usr/share/nginx/html/ohif/app-config.js:ro
+    networks:
+      - orthanc-network
+
+volumes:
+  postgres_data:
+
+networks:
+  orthanc-network:
+    driver: bridge

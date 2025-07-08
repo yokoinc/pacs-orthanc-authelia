@@ -1,0 +1,98 @@
+{
+  "Name": "Orthanc",
+  "HttpPort": 8042,
+  "HttpServerEnabled": true,
+  "DicomPort": 4242,
+  "DicomServerEnabled": true,
+  "DicomAet": "ORTHANC",
+  "DicomCheckCalledAet": false,
+  "DicomCheckModalityHost": false,
+  "RemoteAccessAllowed": true,
+  "AuthenticationEnabled": false,
+  "DicomTlsEnabled": false,
+  "HttpTimeout": 60,
+  "HttpRequestTimeout": 30,
+  "MaximumStorageSize": 0,
+  "MaximumPatientCount": 0,
+  "StorageCompression": true,
+  "PostgreSQL": {
+    "EnableIndex": true,
+    "EnableStorage": true,
+    "Host": "postgres",
+    "Port": 5432,
+    "Database": "orthanc",
+    "Username": "orthanc",
+    "Password": "orthanc_password"
+  },
+  "Plugins": [
+    "/usr/local/share/orthanc/plugins/libOrthancPostgreSQLIndex.so",
+    "/usr/local/share/orthanc/plugins/libOrthancPostgreSQLStorage.so",
+    "/usr/local/share/orthanc/plugins/libOrthancDicomWeb.so",
+    "/usr/local/share/orthanc/plugins/libOrthancGdcm.so",
+    "/usr/local/share/orthanc/plugins/libOrthancWebViewer.so",
+    "/usr/local/share/orthanc/plugins/libStoneWebViewer.so",
+    "/usr/local/share/orthanc/plugins/libHousekeeper.so",
+    "/usr/local/share/orthanc/plugins/libOrthancVolView.so",
+    "/usr/local/share/orthanc/plugins/libOrthancExplorer2.so",
+    "/usr/local/share/orthanc/plugins/libOrthancAuthorization.so"
+  ],
+  "DicomWeb": {
+    "Enable": true,
+    "PublicRoot": "/dicom-web/"
+  },
+  "Housekeeper": {
+    "Enable": true,
+    "GlobalPropertyId": 1024,
+    "Force": false,
+    "ThrottleDelay": 100,
+    "Triggers": {
+      "StorageCompressionChange": true,
+      "MainDicomTagsChange": true,
+      "UnnecessaryDicomAsJsonFiles": true,
+      "DicomWebCache": true
+    }
+  },
+  "OrthancExplorer2": {
+    "Enable": true,
+    "IsDefaultOrthancUI": true,
+    "Theme": "dark",
+      "UiOptions": {
+        "ShowOrthancName": true,
+        "EnableViewerQuickButton": true,
+        "ViewersOrdering": ["stone-webviewer", "ohif", "volview"],
+        "OhifViewer3PublicRoot": "/ohif/",
+        "VolViewPublicRoot": "/volview/",
+        "EnableOpenInOhifViewer3": true,
+        "EnableOpenInVolviewViewer": true,
+        "StoneWebViewerPublicRoot": "/stone-webviewer/",
+        "StudyListColumns": [
+          "PatientID",
+          "PatientName",
+          "StudyDate",
+          "StudyDescription",
+          "AccessionNumber",
+          "InstitutionName",
+          "Modality"
+        ]
+      }
+  },
+  "Authorization": {
+    "Enabled": true,
+    "Endpoint": "http://auth-service:8000",
+    "TokenValidationUrl": "http://auth-service:8000/tokens/validate",
+    "UserProfileUrl": "http://auth-service:8000/user/profile",
+    "TokenCreationUrl": "http://auth-service:8000/tokens/",
+    "SettingsRolesUrl": "http://auth-service:8000/settings/roles",
+    "CheckedLevel": "studies",
+    "Username": "share-user",
+    "Password": "change-me",
+    "VerifySsl": false,
+    "RequestTimeout": 5
+  },
+  "LogLevel": "trace",
+  "LogFile": "",
+  "HttpVerbose": true,
+  "DicomVerbose": false,
+  "HttpsVerifyPeers": false,
+  "HttpsCACertificates": ""
+}

@@ -1,0 +1,22 @@
+---
+users:
+  admin@example.com:
+    displayname: "Administrateur PACS"
+    password: "$argon2id$v=19$m=65536,t=3,p=4$dCAa6JBA+yjmzB41Od77FA$8HSQGghoVQAI3vNL0nPY5sFGf0A0DCxELOtIiRxFEzA"  # password: admin123
+    email: admin@example.com
+    groups:
+      - admin
+      
+  doctor@example.com:
+    displayname: "Médecin"
+    password: "$argon2id$v=19$m=65536,t=3,p=4$HvKkmR7nJKWh39XTspKTbw$skdG+C/3rs8ciC+utcfLooaGxnmExL0oBva0s85w9rs"  # password: doctor123
+    email: doctor@example.com
+    groups:
+      - doctor
+      
+  external@example.com:
+    displayname: "Utilisateur Externe"
+    password: "$argon2id$v=19$m=65536,t=3,p=4$FIhv2khShFd+eDx5IeMnYg$il44rKAy8bKqTOGGf+I4mZpAH3FQxC/PLdNcBJ294ns"  # password: external123
+    email: external@example.com
+    groups:
+      - external
