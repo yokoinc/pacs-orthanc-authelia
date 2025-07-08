@@ -1,96 +1,144 @@
+# =============================================================================
+# AUTHELIA AUTHENTICATION CONFIGURATION FOR PACS STACK
+# =============================================================================
+# Single Sign-On (SSO) authentication for Orthanc PACS with multi-factor support
+# Handles user authentication, session management, and access control
+
 ---
-# Configuration Authelia pour Orthanc PACS
+# =============================================================================
+# GENERAL CONFIGURATION
+# =============================================================================
+
+# Theme configuration - auto detects user preference (light/dark mode)
 theme: auto
 
+# =============================================================================
+# SERVER CONFIGURATION
+# =============================================================================
 server:
-  address: "tcp://0.0.0.0:9091"
-  disable_healthcheck: false
+  address: "tcp://0.0.0.0:9091"     # Listen on all interfaces, port 9091
+  disable_healthcheck: false        # Enable health checks for Docker
   tls:
-    certificate: ""
+    certificate: ""                 # TLS handled by nginx reverse proxy
     key: ""
 
+# =============================================================================
+# LOGGING CONFIGURATION
+# =============================================================================
 log:
-  level: info
+  level: info                       # Log level: trace, debug, info, warn, error
 
+# =============================================================================
+# TWO-FACTOR AUTHENTICATION (TOTP)
+# =============================================================================
 totp:
-  issuer: Orthanc PACS
+  issuer: Orthanc PACS              # Issuer name displayed in authenticator apps
 
-# Base de données pour les utilisateurs (simple fichier)
+# =============================================================================
+# USER AUTHENTICATION BACKEND
+# =============================================================================
+# File-based authentication for simplicity in PACS environment
 authentication_backend:
   file:
-    path: /config/users_database.yml
+    path: /config/users_database.yml # User database file location
     password:
-      algorithm: argon2id
-      iterations: 1
-      salt_length: 16
-      parallelism: 8
-      memory: 128
+      algorithm: argon2id           # Secure password hashing algorithm
+      iterations: 1                 # Hash iterations (1 for faster auth in PACS)
+      salt_length: 16               # Salt length in bytes
+      parallelism: 8                # Parallel threads for hashing
+      memory: 128                   # Memory usage in MB
     search:
-      email: true
-      case_insensitive: true
+      email: true                   # Allow email-based user lookup
+      case_insensitive: true        # Case-insensitive username matching
 
-# Désactiver le changement de mot de passe
+# =============================================================================
+# PASSWORD POLICY
+# =============================================================================
+# Disabled for medical environment - managed externally
 password_policy:
   standard:
-    enabled: false
+    enabled: false                  # Disable standard password requirements
   zxcvbn:
-    enabled: false
+    enabled: false                  # Disable zxcvbn password strength checker
 
-# Configuration des accès
+# =============================================================================
+# ACCESS CONTROL RULES
+# =============================================================================
+# Define who can access what resources based on groups
 access_control:
-  default_policy: deny
+  default_policy: deny              # Deny access by default (secure)
   
   rules:
-    # Admin a accès à tout
+    # Administrators - Full access to all PACS functions
     - domain: pacs.yokoinc.ovh
-      policy: one_factor
+      policy: one_factor            # Require authentication (1FA)
       subject: "group:admin"
       
-    # Doctors ont accès limité
+    # Medical doctors - Standard medical access
     - domain: pacs.yokoinc.ovh
       policy: one_factor
       subject: "group:doctor"
       
-    # External ont accès très limité
+    # External users - Limited read-only access
     - domain: pacs.yokoinc.ovh
       policy: one_factor
       subject: "group:external"
 
+# =============================================================================
+# SESSION MANAGEMENT
+# =============================================================================
+# Optimized for medical workflow - balance between security and usability
 session:
-  name: authelia_session
-  same_site: lax
-  expiration: 1h
-  inactivity: 15m
-  remember_me: 8h
-  secret: "another_very_important_secret_for_sessions_123456789"
+  name: authelia_session           # Session cookie name
+  same_site: lax                   # Cookie same-site policy
+  expiration: 1h                   # Maximum session duration
+  inactivity: 15m                  # Auto-logout after inactivity
+  remember_me: 8h                  # "Remember me" duration
+  secret: "another_very_important_secret_for_sessions_123456789"  # Change in production!
+  
   cookies:
-    - domain: pacs.yokoinc.ovh
-      authelia_url: https://pacs.yokoinc.ovh/auth
-      default_redirection_url: https://pacs.yokoinc.ovh/
-      same_site: lax
+    - domain: pacs.yokoinc.ovh     # Domain for session cookies
+      authelia_url: https://pacs.yokoinc.ovh/auth  # Authelia login URL
+      default_redirection_url: https://pacs.yokoinc.ovh/  # Default redirect after login
+      same_site: lax               # Cookie same-site policy
+  
+  # Redis backend for session storage (scales better than file storage)
   redis:
-    host: redis
-    port: 6379
-    database_index: 0
+    host: redis                    # Redis container hostname
+    port: 6379                     # Redis port
+    database_index: 0              # Redis database number
 
+# =============================================================================
+# RATE LIMITING & BRUTE FORCE PROTECTION
+# =============================================================================
+# Protect against authentication attacks
 regulation:
-  max_retries: 5
-  find_time: 2m
-  ban_time: 5m
+  max_retries: 5                   # Maximum failed login attempts
+  find_time: 2m                    # Time window for counting failures
+  ban_time: 5m                     # Ban duration after max retries
 
-# JWT secret maintenant dans identity_validation.reset_password.jwt_secret
-
+# =============================================================================
+# DATA STORAGE CONFIGURATION
+# =============================================================================
+# Local SQLite storage for user data and authentication logs
 storage:
-  encryption_key: "a_very_important_encryption_key_that_should_be_changed_123456789"
+  encryption_key: "a_very_important_encryption_key_that_should_be_changed_123456789"  # Change in production!
   local:
-    path: /config/db.sqlite3
+    path: /config/db.sqlite3       # SQLite database file location
 
-# Configuration de validation d'identité
+# =============================================================================
+# IDENTITY VALIDATION
+# =============================================================================
+# Configuration for password reset and account verification
 identity_validation:
   reset_password:
-    jwt_secret: "a_very_important_secret_that_should_be_changed_in_production_123456789"
+    jwt_secret: "a_very_important_secret_that_should_be_changed_in_production_123456789"  # Change in production!
 
+# =============================================================================
+# NOTIFICATION SYSTEM
+# =============================================================================
+# File-based notifications for password resets and security alerts
 notifier:
-  disable_startup_check: true
+  disable_startup_check: true      # Skip email server validation on startup
   filesystem:
-    filename: /config/notification.txt
+    filename: /config/notification.txt  # Notification log file
