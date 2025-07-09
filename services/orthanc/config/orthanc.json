@@ -127,19 +127,9 @@
     // Share link configuration
     "ShareDurations": [7, 15, 30, 90],       // Available share durations in days
     "DefaultShareDuration": 7,               // Default duration: 7 days
-    "DefaultShareType": "ohif-viewer-publication",  // Force OHIF as default share type
     
     // Tokens configuration
     "Tokens": {
-      "ShareType": "ohif-viewer-publication",   // Force OHIF for sharing
-      "LandingOptions": [
-        {
-          "Type": "open-viewer-button"         // Button to open viewer
-        },
-        {
-          "Type": "download-study"             // Download study option
-        }
-      ]
     },
     
     // Study list configuration for medical workflow
@@ -151,7 +141,24 @@
         "AccessionNumber",                     // Accession number
         "InstitutionName",                     // Institution name
         "Modality"                             // Imaging modality (CT, MR, etc.)
-      ]
+      ],
+    
+    // Custom buttons for token management
+    "CustomButtons": {
+      "studies-list": [
+        {
+          "HttpMethod": "GET",
+          "Id": "manage-tokens",
+          "Tooltip": "Gérer les tokens de partage (Admin)",
+          "Icon": "fas fa-key",
+          "Url": "/auth/tokens/manage",
+          "Target": "_blank"
+        }
+      ],
+      "study": [],
+      "series": [],
+      "instance": []
+    }
   },
 
   // =============================================================================
@@ -165,6 +172,7 @@
       "/favicon.ico"                                                 // Allow favicon access
     ],
     "TokenHttpHeaders": ["X-Auth-User", "Remote-User", "auth-token"], // Headers containing user info from nginx
+    "TokenGetParameters": ["token"],                                 // URL parameters containing tokens
     "WebServiceRootUrl": "http://auth-service:8000",                 // Root URL for auth-service
     "WebServiceTokenValidationUrl": "http://auth-service:8000/tokens/validate",  // Token validation
     "WebServiceUserProfileUrl": "http://auth-service:8000/user/get-profile",      // User profile

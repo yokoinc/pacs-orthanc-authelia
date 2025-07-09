@@ -200,6 +200,8 @@ def get_settings_roles(username: str = Depends(verify_basic_auth)):
         ],
         "available-viewers": [
             "ohif-viewer-publication",
+            "stone-viewer-publication",
+            "volview-viewer-publication",
             "viewer-instant-link"
         ],
         "default-viewer": "ohif-viewer-publication"
@@ -422,15 +424,23 @@ async def create_token(token_type: str, request: Request):
     }
     store_token(token, token_data)
     
-    # Generate share URL that goes through /share/ route (not protected by Authelia)
+    # Generate URL based on token type
     base_url = get_base_url(request)
-    share_url = f"{base_url}/share/?token={token}"
     
-    # IMPORTANT: Authorization Plugin expects PascalCase for external API
-    response_data = {
-        "Token": token,  # PascalCase for Authorization Plugin
-        "Url": share_url  # PascalCase for Authorization Plugin
-    }
+    if token_type == "viewer-instant-link":
+        # For instant links, no URL returned - Explorer 2 builds it directly
+        response_data = {
+            "Token": token,  # PascalCase for Authorization Plugin
+            "Url": None      # Explorer 2 will build the URL directly
+        }
+    else:
+        # For publications (shares), generate share URL that goes through /share/ route
+        share_url = f"{base_url}/share/?token={token}"
+        response_data = {
+            "Token": token,  # PascalCase for Authorization Plugin
+            "Url": share_url  # PascalCase for Authorization Plugin
+        }
+    
     return JSONResponse(content=response_data)
 
 @app.get("/tokens")
