@@ -5,8 +5,10 @@ WORKDIR /app
 # Installer les dépendances nécessaires
 RUN pip install --no-cache-dir fastapi uvicorn redis
 
-# Copier le fichier principal uniquement
+# Copier le fichier principal, les fichiers statiques et les templates
 COPY auth_service.py /app/
+COPY static/ /app/static/
+COPY templates/ /app/templates/
 
 # Exposer le port utilisé par le service
 EXPOSE 8000

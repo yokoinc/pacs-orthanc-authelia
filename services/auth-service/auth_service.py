@@ -8,6 +8,8 @@ import time
 import json
 import redis
 import os
+import logging
+import urllib.parse
 
 app = FastAPI(title="PACS Auth Service", description="Authentication and token management for PACS")
 security = HTTPBasic()
@@ -20,10 +22,45 @@ REDIS_HOST = os.getenv("REDIS_HOST", "redis")
 REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
 REDIS_DB = int(os.getenv("REDIS_DB", "0"))
 
-DEFAULT_TOKEN_MAX_USES = 50
-DEFAULT_TOKEN_VALIDITY_SECONDS = 7 * 24 * 3600  # 7 days
-CACHE_VALIDITY_USER_SESSION = 300  # 5 minutes
-CACHE_VALIDITY_SHARE_TOKEN = 60    # 1 minute
+# Token configuration
+DEFAULT_TOKEN_MAX_USES = int(os.getenv("DEFAULT_TOKEN_MAX_USES", "50"))
+DEFAULT_TOKEN_VALIDITY_SECONDS = int(os.getenv("DEFAULT_TOKEN_VALIDITY_SECONDS", str(7 * 24 * 3600)))  # 7 days
+CACHE_VALIDITY_USER_SESSION = int(os.getenv("CACHE_VALIDITY_USER_SESSION", "300"))  # 5 minutes  
+CACHE_VALIDITY_SHARE_TOKEN = int(os.getenv("CACHE_VALIDITY_SHARE_TOKEN", "60"))    # 1 minute
+
+# Audit configuration
+AUDIT_RETENTION_DAYS = int(os.getenv("AUDIT_RETENTION_DAYS", "90"))  # 90 days
+UNLIMITED_TOKEN_DURATION = int(os.getenv("UNLIMITED_TOKEN_DURATION", str(365 * 24 * 3600)))  # 1 year
+
+# UI Messages configuration
+UI_MESSAGES = {
+    "INVALID_TOKEN": os.getenv("UI_MSG_INVALID_TOKEN", "Aucun token fourni."),
+    "EXPIRED_TOKEN": os.getenv("UI_MSG_EXPIRED_TOKEN", "Ce lien de partage n'est plus valide."),
+    "NO_STUDY": os.getenv("UI_MSG_NO_STUDY", "Aucune étude associée à ce token."),
+    "INVALID_STUDY": os.getenv("UI_MSG_INVALID_STUDY", "Identifiant d'étude manquant."),
+    "USAGE_LIMIT": os.getenv("UI_MSG_USAGE_LIMIT", "Ce lien de partage a atteint sa limite d'utilisation.")
+}
+
+# Configuration du logging
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+logging.basicConfig(
+    level=getattr(logging, LOG_LEVEL.upper()),
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger("auth-service")
+
+# Configuration CDN
+FONT_AWESOME_CDN = os.getenv("FONT_AWESOME_CDN", "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css")
+
+# Configuration JavaScript
+JS_CONFIG = {
+    "REFRESH_INTERVAL": int(os.getenv("JS_REFRESH_INTERVAL", "30000")),
+    "API_BASE": os.getenv("JS_API_BASE", ""),  # Empty = use window.location.origin
+    "DEBUG_MODE": os.getenv("JS_DEBUG_MODE", "false").lower() == "true"
+}
 
 VALID_USERS = {
     os.getenv("AUTH_USERNAME", "share-user"): os.getenv("AUTH_PASSWORD", "change-me")
@@ -99,6 +136,46 @@ def get_base_url(request: Request) -> str:
     scheme = "https" if request.headers.get("X-Forwarded-Proto") == "https" else "http"
     return f"{scheme}://{host}"
 
+def render_template(template_name: str, **kwargs) -> str:
+    """Render HTML template with provided variables"""
+    template_path = f"/app/templates/{template_name}"
+    try:
+        with open(template_path, "r", encoding="utf-8") as f:
+            template_content = f.read()
+        return template_content.format(font_awesome_cdn=FONT_AWESOME_CDN, **kwargs)
+    except FileNotFoundError:
+        logger.error(f"Template not found: {template_path}")
+        return f"<html><body><h1>Template Error</h1><p>Template not found: {template_name}</p></body></html>"
+    except Exception as e:
+        logger.error(f"Template rendering error: {e}")
+        return f"<html><body><h1>Template Error</h1><p>Error rendering template: {e}</p></body></html>"
+
+def render_error_template(title: str, message: str, icon_class: str, status_code: int = 400) -> HTMLResponse:
+    """Render error template using external template"""
+    content = render_template("error.html", 
+                             title=title, 
+                             message=message, 
+                             icon_class=icon_class,
+                             extra_content="")
+    return HTMLResponse(content=content, status_code=status_code)
+
+def render_access_denied_template(message: str = "Admin access required", back_link: str = "") -> HTMLResponse:
+    """Render access denied template"""
+    back_link_html = f'<a href="{back_link}">← Back to PACS</a>' if back_link else ""
+    content = render_template("access_denied.html", 
+                             message=message,
+                             back_link=back_link_html)
+    return HTMLResponse(content=content, status_code=403)
+
+def render_file_not_found_template(title: str, message: str) -> HTMLResponse:
+    """Render file not found template"""
+    content = render_template("error.html",
+                             title=title,
+                             message=message,
+                             icon_class="fas fa-exclamation-triangle",
+                             extra_content="")
+    return HTMLResponse(content=content, status_code=404)
+
 @app.get("/settings/roles")
 def get_settings_roles(username: str = Depends(verify_basic_auth)):
     # Return roles and permissions adapted to our PACS environment
@@ -139,11 +216,11 @@ async def validate_token(request: Request, username: str = Depends(verify_basic_
     dicom_uid = body.get("dicom-uid", "")
     uri = body.get("uri", "")
     
-    # DEBUG: Log the validation request
-    print(f"DEBUG - Token validation request: {body}")
-    print(f"DEBUG - Token value: {token_value}")
-    print(f"DEBUG - Level: {level}, Method: {method}, URI: {uri}")
-    print(f"DEBUG - Orthanc ID: {orthanc_id}, DICOM UID: {dicom_uid}")
+    # Log the validation request
+    logger.debug(f"Token validation request: {body}")
+    logger.debug(f"Token value: {token_value}")
+    logger.debug(f"Level: {level}, Method: {method}, URI: {uri}")
+    logger.debug(f"Orthanc ID: {orthanc_id}, DICOM UID: {dicom_uid}")
     
     # Check user session tokens (mapped from nginx groups)
     if token_value in USER_ROLES:
@@ -327,7 +404,7 @@ async def create_token(token_type: str, request: Request):
     
     # Handle case where ValidityDuration is 0 (unlimited in Authorization Plugin)
     if validity_duration == 0:
-        validity_duration = 365 * 24 * 3600  # 1 year for "unlimited"
+        validity_duration = UNLIMITED_TOKEN_DURATION
     
     # Generate unique token
     token = str(uuid.uuid4())
@@ -407,8 +484,24 @@ async def revoke_token(token_id: str, request: Request):
     if not token_data:
         raise HTTPException(status_code=404, detail="Token not found")
     
-    # Log the revocation (could be sent to proper logging system)
-    audit_msg = f"Token {token_id} revoked by {remote_user} - type={token_data.get('token_type')}"
+    # Audit log for token revocation
+    audit_data = {
+        "action": "token_revoked",
+        "token_id": token_id,
+        "token_type": token_data.get("token_type"),
+        "revoked_by": remote_user,
+        "revoked_at": time.time(),
+        "token_created_at": token_data.get("created_at"),
+        "token_uses": token_data.get("current_uses", 0),
+        "token_max_uses": token_data.get("max_uses", DEFAULT_TOKEN_MAX_USES)
+    }
+    
+    # Log to application logs
+    logger.info(f"Token revoked: {token_id} by {remote_user} (type: {token_data.get('token_type')})")
+    
+    # Store audit log in Redis with configurable retention
+    audit_key = f"audit:revoke:{token_id}:{int(time.time())}"
+    redis_client.setex(audit_key, AUDIT_RETENTION_DAYS * 24 * 3600, json.dumps(audit_data))
     
     # Delete the token
     delete_token(token_id)
@@ -467,15 +560,7 @@ async def token_test_interface(request: Request):
     try:
         verify_admin_auth(request)
     except HTTPException:
-        return HTMLResponse(content="""
-            <html>
-                <head><title>Access Denied</title></head>
-                <body style="font-family: Arial; text-align: center; padding: 50px;">
-                    <h1>Access Denied</h1>
-                    <p>Admin access required.</p>
-                </body>
-            </html>
-        """, status_code=403)
+        return render_access_denied_template()
     
     # Serve the test page
     try:
@@ -483,14 +568,7 @@ async def token_test_interface(request: Request):
             content = f.read()
         return HTMLResponse(content=content)
     except FileNotFoundError:
-        return HTMLResponse(content="""
-            <html>
-                <head><title>Test Page Not Found</title></head>
-                <body style="font-family: Arial; text-align: center; padding: 50px;">
-                    <h1>Test Page Not Found</h1>
-                </body>
-            </html>
-        """, status_code=404)
+        return render_file_not_found_template("Test Page Not Found", "Test page not found")
 
 @app.get("/tokens/manage")
 async def token_management_interface(request: Request):
@@ -498,33 +576,26 @@ async def token_management_interface(request: Request):
     try:
         verify_admin_auth(request)
     except HTTPException:
-        return HTMLResponse(content="""
-            <html>
-                <head><title>Access Denied</title></head>
-                <body style="font-family: Arial; text-align: center; padding: 50px;">
-                    <h1>Access Denied</h1>
-                    <p>Admin access required to manage tokens.</p>
-                    <a href="/ui/">← Back to PACS</a>
-                </body>
-            </html>
-        """, status_code=403)
+        return render_access_denied_template("Admin access required to manage tokens.", "/ui/")
     
     # Serve the token management interface
     try:
         with open("/app/static/token-manager.html", "r", encoding="utf-8") as f:
             content = f.read()
+        
+        # Inject JavaScript configuration
+        js_config_script = f"""
+        <script>
+        window.PACS_CONFIG = {json.dumps(JS_CONFIG)};
+        </script>
+        """
+        
+        # Insert before closing </head>
+        content = content.replace("</head>", f"{js_config_script}</head>")
+        
         return HTMLResponse(content=content)
     except FileNotFoundError:
-        return HTMLResponse(content="""
-            <html>
-                <head><title>Interface Not Found</title></head>
-                <body style="font-family: Arial; text-align: center; padding: 50px;">
-                    <h1>Interface Not Available</h1>
-                    <p>Token management interface not found.</p>
-                    <a href="/ui/">← Back to PACS</a>
-                </body>
-            </html>
-        """, status_code=404)
+        return render_file_not_found_template("Interface Not Found", "Token management interface not found.")
 
 @app.get("/share/")
 async def share_redirect(request: Request):
@@ -532,151 +603,36 @@ async def share_redirect(request: Request):
     token = request.query_params.get("token")
     
     if not token:
-        return HTMLResponse(content="""
-            <html>
-                <head>
-                    <title>Lien invalide</title>
-                    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
-                    <style>
-                        body { font-family: Avenir, Helvetica, Arial, sans-serif; 
-                               background: #1e242a; color: #e0e0e0; text-align: center; padding: 50px; margin: 0;
-                               -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
-                        h1 { color: #6ea0c8; margin-bottom: 20px; }
-                        p { color: #b0b0b0; }
-                        .icon { font-size: 1.2em; margin-right: 8px; }
-                    </style>
-                </head>
-                <body>
-                    <h1><i class="fas fa-shield-alt icon"></i>Lien invalide</h1>
-                    <p>Aucun token fourni.</p>
-                </body>
-            </html>
-        """, status_code=400)
+        return render_error_template("Lien invalide", UI_MESSAGES["INVALID_TOKEN"], "fas fa-shield-alt", 400)
     
     # Check if token exists and is valid
     token_data = get_token(token)
     if not token_data:
-        return HTMLResponse(content="""
-            <html>
-                <head>
-                    <title>Lien expiré</title>
-                    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
-                    <style>
-                        body { font-family: Avenir, Helvetica, Arial, sans-serif; 
-                               background: #1e242a; color: #e0e0e0; text-align: center; padding: 50px; margin: 0;
-                               -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
-                        h1 { color: #6ea0c8; margin-bottom: 20px; }
-                        p { color: #b0b0b0; }
-                        .icon { font-size: 1.2em; margin-right: 8px; }
-                    </style>
-                </head>
-                <body>
-                    <h1><i class="fas fa-clock icon"></i>Lien expiré</h1>
-                    <p>Ce lien de partage n'est plus valide.</p>
-                </body>
-            </html>
-        """, status_code=410)
+        return render_error_template("Lien expiré", UI_MESSAGES["EXPIRED_TOKEN"], "fas fa-clock", 410)
     
     # Check if token has expired
     if time.time() >= token_data["expires_at"]:
         delete_token(token)
-        return HTMLResponse(content="""
-            <html>
-                <head>
-                    <title>Lien expiré</title>
-                    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
-                    <style>
-                        body { font-family: Avenir, Helvetica, Arial, sans-serif; 
-                               background: #1e242a; color: #e0e0e0; text-align: center; padding: 50px; margin: 0;
-                               -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
-                        h1 { color: #6ea0c8; margin-bottom: 20px; }
-                        p { color: #b0b0b0; }
-                        .icon { font-size: 1.2em; margin-right: 8px; }
-                    </style>
-                </head>
-                <body>
-                    <h1><i class="fas fa-clock icon"></i>Lien expiré</h1>
-                    <p>Ce lien de partage a expiré.</p>
-                </body>
-            </html>
-        """, status_code=410)
+        return render_error_template("Lien expiré", UI_MESSAGES["EXPIRED_TOKEN"], "fas fa-clock", 410)
     
     # Get study from token resources
     resources = token_data.get("resources", [])
     if not resources:
-        return HTMLResponse(content="""
-            <html>
-                <head>
-                    <title>Aucune étude</title>
-                    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
-                    <style>
-                        body { font-family: Avenir, Helvetica, Arial, sans-serif; 
-                               background: #1e242a; color: #e0e0e0; text-align: center; padding: 50px; margin: 0;
-                               -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
-                        h1 { color: #6ea0c8; margin-bottom: 20px; }
-                        p { color: #b0b0b0; }
-                        .icon { font-size: 1.2em; margin-right: 8px; }
-                    </style>
-                </head>
-                <body>
-                    <h1><i class="fas fa-folder-open icon"></i>Aucune étude</h1>
-                    <p>Aucune étude associée à ce token.</p>
-                </body>
-            </html>
-        """, status_code=400)
+        return render_error_template("Aucune étude", UI_MESSAGES["NO_STUDY"], "fas fa-folder-open", 400)
     
     study_uid = resources[0].get("DicomUid", "").strip()  # Remove any whitespace
     if not study_uid:
-        return HTMLResponse(content="""
-            <html>
-                <head>
-                    <title>Étude invalide</title>
-                    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
-                    <style>
-                        body { font-family: Avenir, Helvetica, Arial, sans-serif; 
-                               background: #1e242a; color: #e0e0e0; text-align: center; padding: 50px; margin: 0;
-                               -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
-                        h1 { color: #6ea0c8; margin-bottom: 20px; }
-                        p { color: #b0b0b0; }
-                        .icon { font-size: 1.2em; margin-right: 8px; }
-                    </style>
-                </head>
-                <body>
-                    <h1><i class="fas fa-exclamation-triangle icon"></i>Étude invalide</h1>
-                    <p>Identifiant d'étude manquant.</p>
-                </body>
-            </html>
-        """, status_code=400)
+        return render_error_template("Étude invalide", UI_MESSAGES["INVALID_STUDY"], "fas fa-exclamation-triangle", 400)
     
     # Increment token usage counter for share access
     if not increment_token_usage(token):
-        return HTMLResponse(content="""
-            <html>
-                <head>
-                    <title>Lien expiré</title>
-                    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
-                    <style>
-                        body { font-family: Avenir, Helvetica, Arial, sans-serif; 
-                               background: #1e242a; color: #e0e0e0; text-align: center; padding: 50px; margin: 0;
-                               -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
-                        h1 { color: #6ea0c8; margin-bottom: 20px; }
-                        p { color: #b0b0b0; }
-                        .icon { font-size: 1.2em; margin-right: 8px; }
-                    </style>
-                </head>
-                <body>
-                    <h1><i class="fas fa-clock icon"></i>Lien expiré</h1>
-                    <p>Ce lien de partage a atteint sa limite d'utilisation.</p>
-                </body>
-            </html>
-        """, status_code=410)
+        return render_error_template("Lien expiré", UI_MESSAGES["USAGE_LIMIT"], "fas fa-clock", 410)
     
     # Redirect to OHIF with study and token for Authorization Plugin
     base_url = get_base_url(request)
     # Add cache-busting parameter to force config reload
     cache_bust = int(time.time())
     # URL encode the study UID to handle any special characters
-    import urllib.parse
     study_uid_encoded = urllib.parse.quote(study_uid, safe='')
     ohif_url = f"{base_url}/ohif/viewer?StudyInstanceUIDs={study_uid_encoded}&token={token}&_cb={cache_bust}"
     

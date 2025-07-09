@@ -38,8 +38,40 @@ services:
       dockerfile: Dockerfile
     container_name: pacs-auth-service
     restart: unless-stopped
+    environment:
+      # Authentication
+      - AUTH_USERNAME=share-user
+      - AUTH_PASSWORD=change-me  # Must match Authorization Plugin config
+      # Redis
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      # Logging
+      - LOG_LEVEL=INFO
+      # CDN
+      - FONT_AWESOME_CDN=https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css
+      # Token configuration
+      - DEFAULT_TOKEN_MAX_USES=50
+      - DEFAULT_TOKEN_VALIDITY_SECONDS=604800  # 7 days
+      - CACHE_VALIDITY_USER_SESSION=300  # 5 minutes
+      - CACHE_VALIDITY_SHARE_TOKEN=60    # 1 minute
+      - UNLIMITED_TOKEN_DURATION=31536000  # 1 year
+      # Audit
+      - AUDIT_RETENTION_DAYS=90
+      # JavaScript config
+      - JS_REFRESH_INTERVAL=30000  # 30 seconds
+      - JS_API_BASE=  # Empty = use window.location.origin
+      - JS_DEBUG_MODE=false
+      # UI Messages (French)
+      - UI_MSG_INVALID_TOKEN=Aucun token fourni.
+      - UI_MSG_EXPIRED_TOKEN=Ce lien de partage n'est plus valide.
+      - UI_MSG_NO_STUDY=Aucune étude associée à ce token.
+      - UI_MSG_INVALID_STUDY=Identifiant d'étude manquant.
+      - UI_MSG_USAGE_LIMIT=Ce lien de partage a atteint sa limite d'utilisation.
     volumes:
       - ./services/auth-service/auth_service.py:/app/auth_service.py:ro  # Mount Python file directly
+      - ./services/auth-service/static:/app/static:ro  # Mount static files
+      - ./services/auth-service/templates:/app/templates:ro  # Mount templates
     networks:
       - orthanc-network                 # Custom authentication service
 
@@ -69,6 +101,7 @@ services:
       - auth-service                    # Authentication service
     volumes:
       - ./services/orthanc/config/orthanc.json:/etc/orthanc/orthanc.json:ro  # PACS configuration
+      - ./services/orthanc/plugins:/var/lib/orthanc/plugins:ro  # Custom plugins directory
     networks:
       - orthanc-network
 
