@@ -1,0 +1,307 @@
+# PAX-MA-STACK - .gitignore
+
+# ===============================================
+# Environment and Configuration
+# ===============================================
+
+# Environment variables (contains sensitive data)
+.env
+.env.local
+.env.production
+.env.development
+
+# Backup environment files
+.env.backup
+.env.bak
+
+# ===============================================
+# Docker and Container Data
+# ===============================================
+
+# Docker volumes and persistent data
+volumes/
+data/
+postgres_data/
+redis_data/
+
+# Docker build context
+.dockerignore
+
+# ===============================================
+# Database Files
+# ===============================================
+
+# PostgreSQL data
+*.sql
+*.db
+*.sqlite
+*.sqlite3
+
+# Database dumps and backups
+dump.sql
+backup.sql
+*.dump
+
+# ===============================================
+# Logs and Monitoring
+# ===============================================
+
+# Application logs
+logs/
+*.log
+*.log.*
+
+# Nginx logs
+access.log
+error.log
+
+# Authelia logs
+authelia.log
+
+# Orthanc logs
+orthanc.log
+
+# ===============================================
+# Security and Authentication
+# ===============================================
+
+# SSL certificates and keys
+*.pem
+*.key
+*.crt
+*.cert
+*.p12
+*.pfx
+
+# Authelia database and config with secrets
+services/authelia/config/db.sqlite3
+services/authelia/config/notification.txt
+
+# SSH keys
+id_rsa
+id_rsa.pub
+*.ssh
+
+# ===============================================
+# Temporary and Cache Files
+# ===============================================
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Cache directories
+.cache/
+.tmp/
+tmp/
+temp/
+
+# ===============================================
+# Development and Testing
+# ===============================================
+
+# Node.js (if using for development)
+node_modules/
+npm-debug.log
+yarn-error.log
+package-lock.json
+
+# Python (if using for development)
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+
+# ===============================================
+# Docker Build and Runtime
+# ===============================================
+
+# Docker compose override files
+docker-compose.override.yml
+docker-compose.override.yaml
+docker-compose.local.yml
+docker-compose.dev.yml
+
+# Docker build artifacts
+Dockerfile.dev
+Dockerfile.local
+
+# ===============================================
+# Backup and Archive Files
+# ===============================================
+
+# Archive files
+*.tar
+*.tar.gz
+*.tgz
+*.zip
+*.rar
+*.7z
+
+# Backup files
+*.bak
+*.backup
+*.old
+
+# ===============================================
+# PACS Specific Files
+# ===============================================
+
+# DICOM files (potentially large and sensitive)
+*.dcm
+*.DCM
+*.dicom
+*.DICOM
+
+# Medical image files
+*.nii
+*.nii.gz
+*.img
+*.hdr
+
+# OHIF build artifacts
+services/ohif/docker/3.10.2-fr/platform/app/dist/
+services/ohif/docker/3.10.2-fr/platform/app/node_modules/
+services/ohif/docker/3.10.2-fr/platform/app/.next/
+services/ohif/docker/3.10.2-fr/platform/app/build/
+
+# ===============================================
+# Documentation and Reports
+# ===============================================
+
+# Generated documentation
+docs/build/
+docs/_build/
+site/
+
+# Report files
+*.pdf
+*.doc
+*.docx
+
+# ===============================================
+# CI/CD and Deployment
+# ===============================================
+
+# CI/CD artifacts
+.github/
+.gitlab-ci.yml
+.travis.yml
+circle.yml
+
+# Deployment scripts (may contain sensitive info)
+deploy.sh
+production.sh
+
+# ===============================================
+# Custom Application Data
+# ===============================================
+
+# Token management data
+tokens/
+sessions/
+
+# User uploads
+uploads/
+user_data/
+
+# Configuration backups
+config.backup/
+config.old/
+
+# ===============================================
+# IDE and Development Tools
+# ===============================================
+
+# JetBrains
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Visual Studio Code
+.vscode/
+*.code-workspace
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# ===============================================
+# Git and Version Control
+# ===============================================
+
+# Git merge conflicts
+*.orig
+
+# Git patches
+*.patch
+
+# ===============================================
+# macOS Specific
+# ===============================================
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# ===============================================
+# Windows Specific
+# ===============================================
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# ===============================================
+# Linux Specific
+# ===============================================
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+
+# ===============================================
+# Project Specific Exclusions
+# ===============================================
+
+# Exclude sensitive configuration files
+services/authelia/config/users_database.yml.backup
+services/orthanc/config/orthanc.json.backup
+
+# Exclude runtime data
+runtime/
+pid/
+*.pid
+
+# Exclude test data
+test_data/
+sample_data/
+demo_data/
+
+# ===============================================
+# Docker Registry and Images
+# ===============================================
+
+# Local Docker registry data
+registry/
