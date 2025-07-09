@@ -1,30 +1,42 @@
-from fastapi import FastAPI, Request, Header, HTTPException, Depends
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, Request, HTTPException, Depends
+from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from fastapi.staticfiles import StaticFiles
 import secrets
 import uuid
 import time
 import json
 import redis
+import os
 
-app = FastAPI()
+app = FastAPI(title="PACS Auth Service", description="Authentication and token management for PACS")
 security = HTTPBasic()
 
-# Redis connection
-redis_client = redis.Redis(host='redis', port=6379, db=0, decode_responses=True)
+# Mount static files
+app.mount("/static", StaticFiles(directory="/app/static"), name="static")
+
+# Configuration
+REDIS_HOST = os.getenv("REDIS_HOST", "redis")
+REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
+REDIS_DB = int(os.getenv("REDIS_DB", "0"))
+
+DEFAULT_TOKEN_MAX_USES = 50
+DEFAULT_TOKEN_VALIDITY_SECONDS = 7 * 24 * 3600  # 7 days
+CACHE_VALIDITY_USER_SESSION = 300  # 5 minutes
+CACHE_VALIDITY_SHARE_TOKEN = 60    # 1 minute
 
 VALID_USERS = {
-    "share-user": "change-me"
+    os.getenv("AUTH_USERNAME", "share-user"): os.getenv("AUTH_PASSWORD", "change-me")
 }
 
-TOKENS = {
-    "admin-token": "admin-role",
-    "doctor-token": "doctor-role",
-    "external-token": "external-role",
-    "admin": "admin-role",  # Direct group mapping from nginx
-    "doctor": "doctor-role",
+USER_ROLES = {
+    "admin": "admin-role",
+    "doctor": "doctor-role", 
     "external": "external-role"
 }
+
+# Redis connection
+redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB, decode_responses=True)
 
 def store_token(token: str, token_data: dict):
     """Store token in Redis with expiration"""
@@ -64,10 +76,28 @@ def increment_token_usage(token: str) -> bool:
     return True
 
 def verify_basic_auth(credentials: HTTPBasicCredentials = Depends(security)):
+    """Verify HTTP Basic authentication"""
     correct_password = VALID_USERS.get(credentials.username)
     if not correct_password or not secrets.compare_digest(credentials.password, correct_password):
-        raise HTTPException(status_code=401)
+        raise HTTPException(status_code=401, detail="Invalid credentials")
     return credentials.username
+
+def verify_admin_auth(request: Request):
+    """Verify admin authentication from Authelia headers"""
+    remote_groups = request.headers.get("Remote-Groups", "")
+    if "admin" not in remote_groups:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return request.headers.get("Remote-User", "unknown")
+
+def normalize_bearer_token(token_value: str) -> str:
+    """Remove Bearer prefix if present"""
+    return token_value[7:] if token_value.startswith("Bearer ") else token_value
+
+def get_base_url(request: Request) -> str:
+    """Get base URL from request headers"""
+    host = request.headers.get("Host", "localhost")
+    scheme = "https" if request.headers.get("X-Forwarded-Proto") == "https" else "http"
+    return f"{scheme}://{host}"
 
 @app.get("/settings/roles")
 def get_settings_roles(username: str = Depends(verify_basic_auth)):
@@ -101,22 +131,27 @@ def get_settings_roles(username: str = Depends(verify_basic_auth)):
 @app.post("/tokens/validate")
 async def validate_token(request: Request, username: str = Depends(verify_basic_auth)):
     body = await request.json()
-    print(f"DEBUG - Token validation request: {body}")
     
-    token_value = body.get("token-value", "")
+    token_value = normalize_bearer_token(body.get("token-value", ""))
     level = body.get("level", "")
     method = body.get("method", "")
     orthanc_id = body.get("orthanc-id", "")
     dicom_uid = body.get("dicom-uid", "")
     uri = body.get("uri", "")
     
-    # Check static tokens (user sessions)
-    if token_value in TOKENS:
-        role = TOKENS[token_value]
+    # DEBUG: Log the validation request
+    print(f"DEBUG - Token validation request: {body}")
+    print(f"DEBUG - Token value: {token_value}")
+    print(f"DEBUG - Level: {level}, Method: {method}, URI: {uri}")
+    print(f"DEBUG - Orthanc ID: {orthanc_id}, DICOM UID: {dicom_uid}")
+    
+    # Check user session tokens (mapped from nginx groups)
+    if token_value in USER_ROLES:
+        role = USER_ROLES[token_value]
         granted = check_permission_for_role(role, level, method, uri)
         return JSONResponse(content={
             "granted": granted,
-            "validity": 300  # Cache for 5 minutes
+            "validity": CACHE_VALIDITY_USER_SESSION
         })
     
     # Check generated share tokens in Redis
@@ -142,7 +177,7 @@ async def validate_token(request: Request, username: str = Depends(verify_basic_
         
         return JSONResponse(content={
             "granted": granted,
-            "validity": 60  # Cache for 1 minute for share tokens
+            "validity": CACHE_VALIDITY_SHARE_TOKEN
         })
     
     # Token not found
@@ -184,9 +219,9 @@ def check_resource_access(token_data: dict, level: str, method: str, orthanc_id:
     token_resources = token_data.get("resources", [])
     
     for resource in token_resources:
-        token_orthanc_id = resource.get("orthanc-id", "")
-        token_dicom_uid = resource.get("dicom-uid", "")
-        token_level = resource.get("level", "")
+        token_orthanc_id = resource.get("OrthancId", resource.get("orthanc-id", ""))
+        token_dicom_uid = resource.get("DicomUid", resource.get("dicom-uid", ""))
+        token_level = resource.get("Level", resource.get("level", ""))
         
         # Exact match
         if orthanc_id == token_orthanc_id or dicom_uid == token_dicom_uid:
@@ -202,29 +237,11 @@ def check_resource_access(token_data: dict, level: str, method: str, orthanc_id:
     return False
 
 @app.post("/user/get-profile")
-async def get_user_profile(request: Request):
-    # Manual basic auth parsing
-    auth_header = request.headers.get("Authorization", "")
-    if not auth_header.startswith("Basic "):
-        raise HTTPException(status_code=401, detail="Missing Basic auth")
-    
-    try:
-        import base64
-        encoded_credentials = auth_header[6:]  # Remove "Basic "
-        decoded_credentials = base64.b64decode(encoded_credentials).decode('utf-8')
-        username, password = decoded_credentials.split(":", 1)
-        
-        if username != "share-user" or password != "change-me":
-            raise HTTPException(status_code=401, detail="Invalid credentials")
-    except Exception:
-        raise HTTPException(status_code=401, detail="Invalid auth format")
-    
+async def get_user_profile(request: Request, username: str = Depends(verify_basic_auth)):
     body = await request.json()
-    print("DEBUG - Request body:", body)
     
     # Get user info from request body (sent by Authorization plugin)
-    token_value = body.get("token-value", "")
-    print(f"DEBUG - Token value: {token_value}")
+    token_value = normalize_bearer_token(body.get("token-value", ""))
     
     # The token-value contains the group from nginx headers
     group = token_value
@@ -244,63 +261,15 @@ async def get_user_profile(request: Request):
         "name": user_name,
         "authorized-labels": ["*"],  # Access to all labels
         "permissions": permissions,
-        "validity": 60
-    })
-
-@app.post("/tokens/{token_type}")
-@app.put("/tokens/{token_type}")
-async def create_token(token_type: str, request: Request):
-    # Check Authelia authentication headers
-    remote_user = request.headers.get("Remote-User")
-    remote_groups = request.headers.get("Remote-Groups")
-    
-    if not remote_user or not remote_groups:
-        raise HTTPException(status_code=401, detail="Missing authentication headers")
-    
-    body = await request.json()
-    print(f"DEBUG - Creating token type: {token_type}, body: {body}")
-    
-    # Extract parameters from Authorization plugin request
-    request_id = body.get("id", "")
-    resources = body.get("resources", [])
-    expiration_date = body.get("expiration-date")
-    validity_duration = body.get("validity-duration", 7 * 24 * 3600)  # 7 days default
-    
-    # Generate unique token
-    token = str(uuid.uuid4())
-    
-    # Log the token type for debugging
-    print(f"DEBUG - Token type requested: {token_type}")
-    
-    # Store token in Redis with expiration and resources
-    token_data = {
-        "token_type": token_type,
-        "request_id": request_id,
-        "resources": resources,
-        "role": "external-role",  # Share tokens are read-only
-        "expires_at": time.time() + validity_duration,
-        "created_at": time.time(),
-        "max_uses": 50,  # Maximum 50 utilisations
-        "current_uses": 0  # Compteur d'utilisations
-    }
-    store_token(token, token_data)
-    
-    # Generate share URL based on token type - use decode endpoint for proper redirection
-    share_url = f"https://pacs.yokoinc.ovh/ui/app/share-landing.html?token={token}"
-    
-    return JSONResponse(content={
-        "request": body,  # Copy of the request
-        "token": token,
-        "url": share_url
+        "validity": CACHE_VALIDITY_SHARE_TOKEN
     })
 
 @app.post("/tokens/decode")
 async def decode_token(request: Request):
     body = await request.json()
-    print(f"DEBUG - Decoding token, body: {body}")
     
     token_key = body.get("token-key", "")
-    token_value = body.get("token-value", "")
+    token_value = normalize_bearer_token(body.get("token-value", ""))
     
     # Check if token exists and is valid in Redis
     token_data = get_token(token_value)
@@ -325,24 +294,416 @@ async def decode_token(request: Request):
         })
     
     resource = resources[0]
-    orthanc_id = resource.get("orthanc-id", "")
-    level = resource.get("level", "study")
+    orthanc_id = resource.get("OrthancId", resource.get("orthanc-id", ""))
+    level = resource.get("Level", resource.get("level", "study"))
     token_type = token_data.get("token_type", "")
     
-    # Generate redirect URL based on token type and resource
-    if token_type == "ohif-viewer-publication":
-        redirect_url = f"https://pacs.yokoinc.ovh/ohif/?StudyInstanceUIDs={orthanc_id}&token={token_value}"
-    elif token_type == "viewer-instant-link":
-        # Instant viewer link - redirects to public share endpoint
-        redirect_url = f"https://pacs.yokoinc.ovh/share/?token={token_value}#{level}s/{orthanc_id}"
-    else:
-        # Default to public share endpoint
-        redirect_url = f"https://pacs.yokoinc.ovh/share/?token={token_value}#{level}s/{orthanc_id}"
+    # Generate redirect URL - always use /share/ route for token handling
+    base_url = get_base_url(request)
+    redirect_url = f"{base_url}/share/?token={token_value}"
     
     return JSONResponse(content={
         "token-type": token_type,
         "redirect-url": redirect_url
     })
+
+@app.post("/tokens/{token_type}")
+@app.put("/tokens/{token_type}")
+async def create_token(token_type: str, request: Request):
+    # Check Authelia authentication headers
+    remote_user = request.headers.get("Remote-User")
+    remote_groups = request.headers.get("Remote-Groups")
+    
+    if not remote_user or not remote_groups:
+        raise HTTPException(status_code=401, detail="Missing authentication headers")
+    
+    body = await request.json()
+    
+    # Extract parameters from Authorization plugin request (PascalCase)
+    request_id = body.get("Id", body.get("id", ""))
+    resources = body.get("Resources", body.get("resources", []))
+    expiration_date = body.get("ExpirationDate", body.get("expiration-date"))
+    validity_duration = body.get("ValidityDuration", body.get("validity-duration", DEFAULT_TOKEN_VALIDITY_SECONDS))
+    
+    # Handle case where ValidityDuration is 0 (unlimited in Authorization Plugin)
+    if validity_duration == 0:
+        validity_duration = 365 * 24 * 3600  # 1 year for "unlimited"
+    
+    # Generate unique token
+    token = str(uuid.uuid4())
+    
+    # Store token in Redis with expiration and resources
+    token_data = {
+        "token_type": token_type,
+        "request_id": request_id,
+        "resources": resources,
+        "role": "external-role",  # Share tokens are read-only
+        "expires_at": time.time() + validity_duration,
+        "created_at": time.time(),
+        "max_uses": DEFAULT_TOKEN_MAX_USES,
+        "current_uses": 0
+    }
+    store_token(token, token_data)
+    
+    # Generate share URL that goes through /share/ route (not protected by Authelia)
+    base_url = get_base_url(request)
+    share_url = f"{base_url}/share/?token={token}"
+    
+    # IMPORTANT: Authorization Plugin expects PascalCase for external API
+    response_data = {
+        "Token": token,  # PascalCase for Authorization Plugin
+        "Url": share_url  # PascalCase for Authorization Plugin
+    }
+    return JSONResponse(content=response_data)
+
+@app.get("/tokens")
+async def list_tokens(request: Request):
+    """List all active tokens with their metadata"""
+    verify_admin_auth(request)
+    
+    # Get all tokens from Redis
+    tokens = []
+    cursor = 0
+    while True:
+        cursor, keys = redis_client.scan(cursor, match="token:*", count=100)
+        for key in keys:
+            token_id = key.replace("token:", "")
+            token_data = get_token(token_id)
+            if token_data:
+                # Add token ID to the data
+                token_data["id"] = token_id
+                # Calculate remaining time
+                remaining_time = max(0, int(token_data.get("expires_at", time.time()) - time.time()))
+                token_data["remaining_seconds"] = remaining_time
+                # Format creation time
+                try:
+                    created_at = token_data.get("created_at", time.time())
+                    token_data["created_at_formatted"] = time.strftime(
+                        "%Y-%m-%d %H:%M:%S", 
+                        time.localtime(created_at)
+                    )
+                except (ValueError, OSError, KeyError):
+                    token_data["created_at_formatted"] = "Unknown"
+                tokens.append(token_data)
+        
+        if cursor == 0:
+            break
+    
+    # Sort by creation date (newest first)
+    tokens.sort(key=lambda x: x.get("created_at", 0), reverse=True)
+    
+    return JSONResponse(content={
+        "tokens": tokens,
+        "count": len(tokens)
+    })
+
+@app.delete("/tokens/{token_id}")
+async def revoke_token(token_id: str, request: Request):
+    """Revoke a specific token"""
+    remote_user = verify_admin_auth(request)
+    
+    # Check if token exists
+    token_data = get_token(token_id)
+    if not token_data:
+        raise HTTPException(status_code=404, detail="Token not found")
+    
+    # Log the revocation (could be sent to proper logging system)
+    audit_msg = f"Token {token_id} revoked by {remote_user} - type={token_data.get('token_type')}"
+    
+    # Delete the token
+    delete_token(token_id)
+    
+    return JSONResponse(content={
+        "message": "Token revoked successfully",
+        "token_id": token_id,
+        "revoked_by": remote_user,
+        "revoked_at": time.time()
+    })
+
+@app.get("/tokens/stats")
+async def token_stats(request: Request):
+    """Get statistics about tokens"""
+    verify_admin_auth(request)
+    
+    # Collect statistics
+    total_tokens = 0
+    tokens_by_type = {}
+    tokens_by_usage = {"low": 0, "medium": 0, "high": 0}
+    
+    cursor = 0
+    while True:
+        cursor, keys = redis_client.scan(cursor, match="token:*", count=100)
+        for key in keys:
+            token_id = key.replace("token:", "")
+            token_data = get_token(token_id)
+            if token_data:
+                total_tokens += 1
+                
+                # Count by type
+                token_type = token_data.get("token_type", "unknown")
+                tokens_by_type[token_type] = tokens_by_type.get(token_type, 0) + 1
+                
+                # Count by usage
+                usage_percent = (token_data.get("current_uses", 0) / token_data.get("max_uses", DEFAULT_TOKEN_MAX_USES)) * 100
+                if usage_percent < 33:
+                    tokens_by_usage["low"] += 1
+                elif usage_percent < 66:
+                    tokens_by_usage["medium"] += 1
+                else:
+                    tokens_by_usage["high"] += 1
+        
+        if cursor == 0:
+            break
+    
+    return JSONResponse(content={
+        "total_active_tokens": total_tokens,
+        "tokens_by_type": tokens_by_type,
+        "tokens_by_usage": tokens_by_usage
+    })
+
+@app.get("/tokens/test")
+async def token_test_interface(request: Request):
+    """Test page for debugging token API"""
+    try:
+        verify_admin_auth(request)
+    except HTTPException:
+        return HTMLResponse(content="""
+            <html>
+                <head><title>Access Denied</title></head>
+                <body style="font-family: Arial; text-align: center; padding: 50px;">
+                    <h1>Access Denied</h1>
+                    <p>Admin access required.</p>
+                </body>
+            </html>
+        """, status_code=403)
+    
+    # Serve the test page
+    try:
+        with open("/app/static/test-page.html", "r", encoding="utf-8") as f:
+            content = f.read()
+        return HTMLResponse(content=content)
+    except FileNotFoundError:
+        return HTMLResponse(content="""
+            <html>
+                <head><title>Test Page Not Found</title></head>
+                <body style="font-family: Arial; text-align: center; padding: 50px;">
+                    <h1>Test Page Not Found</h1>
+                </body>
+            </html>
+        """, status_code=404)
+
+@app.get("/tokens/manage")
+async def token_management_interface(request: Request):
+    """Serve the token management web interface"""
+    try:
+        verify_admin_auth(request)
+    except HTTPException:
+        return HTMLResponse(content="""
+            <html>
+                <head><title>Access Denied</title></head>
+                <body style="font-family: Arial; text-align: center; padding: 50px;">
+                    <h1>Access Denied</h1>
+                    <p>Admin access required to manage tokens.</p>
+                    <a href="/ui/">← Back to PACS</a>
+                </body>
+            </html>
+        """, status_code=403)
+    
+    # Serve the token management interface
+    try:
+        with open("/app/static/token-manager.html", "r", encoding="utf-8") as f:
+            content = f.read()
+        return HTMLResponse(content=content)
+    except FileNotFoundError:
+        return HTMLResponse(content="""
+            <html>
+                <head><title>Interface Not Found</title></head>
+                <body style="font-family: Arial; text-align: center; padding: 50px;">
+                    <h1>Interface Not Available</h1>
+                    <p>Token management interface not found.</p>
+                    <a href="/ui/">← Back to PACS</a>
+                </body>
+            </html>
+        """, status_code=404)
+
+@app.get("/share/")
+async def share_redirect(request: Request):
+    """Validate token and redirect to OHIF or show error"""
+    token = request.query_params.get("token")
+    
+    if not token:
+        return HTMLResponse(content="""
+            <html>
+                <head>
+                    <title>Lien invalide</title>
+                    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+                    <style>
+                        body { font-family: Avenir, Helvetica, Arial, sans-serif; 
+                               background: #1e242a; color: #e0e0e0; text-align: center; padding: 50px; margin: 0;
+                               -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+                        h1 { color: #6ea0c8; margin-bottom: 20px; }
+                        p { color: #b0b0b0; }
+                        .icon { font-size: 1.2em; margin-right: 8px; }
+                    </style>
+                </head>
+                <body>
+                    <h1><i class="fas fa-shield-alt icon"></i>Lien invalide</h1>
+                    <p>Aucun token fourni.</p>
+                </body>
+            </html>
+        """, status_code=400)
+    
+    # Check if token exists and is valid
+    token_data = get_token(token)
+    if not token_data:
+        return HTMLResponse(content="""
+            <html>
+                <head>
+                    <title>Lien expiré</title>
+                    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+                    <style>
+                        body { font-family: Avenir, Helvetica, Arial, sans-serif; 
+                               background: #1e242a; color: #e0e0e0; text-align: center; padding: 50px; margin: 0;
+                               -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+                        h1 { color: #6ea0c8; margin-bottom: 20px; }
+                        p { color: #b0b0b0; }
+                        .icon { font-size: 1.2em; margin-right: 8px; }
+                    </style>
+                </head>
+                <body>
+                    <h1><i class="fas fa-clock icon"></i>Lien expiré</h1>
+                    <p>Ce lien de partage n'est plus valide.</p>
+                </body>
+            </html>
+        """, status_code=410)
+    
+    # Check if token has expired
+    if time.time() >= token_data["expires_at"]:
+        delete_token(token)
+        return HTMLResponse(content="""
+            <html>
+                <head>
+                    <title>Lien expiré</title>
+                    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+                    <style>
+                        body { font-family: Avenir, Helvetica, Arial, sans-serif; 
+                               background: #1e242a; color: #e0e0e0; text-align: center; padding: 50px; margin: 0;
+                               -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+                        h1 { color: #6ea0c8; margin-bottom: 20px; }
+                        p { color: #b0b0b0; }
+                        .icon { font-size: 1.2em; margin-right: 8px; }
+                    </style>
+                </head>
+                <body>
+                    <h1><i class="fas fa-clock icon"></i>Lien expiré</h1>
+                    <p>Ce lien de partage a expiré.</p>
+                </body>
+            </html>
+        """, status_code=410)
+    
+    # Get study from token resources
+    resources = token_data.get("resources", [])
+    if not resources:
+        return HTMLResponse(content="""
+            <html>
+                <head>
+                    <title>Aucune étude</title>
+                    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+                    <style>
+                        body { font-family: Avenir, Helvetica, Arial, sans-serif; 
+                               background: #1e242a; color: #e0e0e0; text-align: center; padding: 50px; margin: 0;
+                               -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+                        h1 { color: #6ea0c8; margin-bottom: 20px; }
+                        p { color: #b0b0b0; }
+                        .icon { font-size: 1.2em; margin-right: 8px; }
+                    </style>
+                </head>
+                <body>
+                    <h1><i class="fas fa-folder-open icon"></i>Aucune étude</h1>
+                    <p>Aucune étude associée à ce token.</p>
+                </body>
+            </html>
+        """, status_code=400)
+    
+    study_uid = resources[0].get("DicomUid", "").strip()  # Remove any whitespace
+    if not study_uid:
+        return HTMLResponse(content="""
+            <html>
+                <head>
+                    <title>Étude invalide</title>
+                    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+                    <style>
+                        body { font-family: Avenir, Helvetica, Arial, sans-serif; 
+                               background: #1e242a; color: #e0e0e0; text-align: center; padding: 50px; margin: 0;
+                               -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+                        h1 { color: #6ea0c8; margin-bottom: 20px; }
+                        p { color: #b0b0b0; }
+                        .icon { font-size: 1.2em; margin-right: 8px; }
+                    </style>
+                </head>
+                <body>
+                    <h1><i class="fas fa-exclamation-triangle icon"></i>Étude invalide</h1>
+                    <p>Identifiant d'étude manquant.</p>
+                </body>
+            </html>
+        """, status_code=400)
+    
+    # Increment token usage counter for share access
+    if not increment_token_usage(token):
+        return HTMLResponse(content="""
+            <html>
+                <head>
+                    <title>Lien expiré</title>
+                    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+                    <style>
+                        body { font-family: Avenir, Helvetica, Arial, sans-serif; 
+                               background: #1e242a; color: #e0e0e0; text-align: center; padding: 50px; margin: 0;
+                               -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+                        h1 { color: #6ea0c8; margin-bottom: 20px; }
+                        p { color: #b0b0b0; }
+                        .icon { font-size: 1.2em; margin-right: 8px; }
+                    </style>
+                </head>
+                <body>
+                    <h1><i class="fas fa-clock icon"></i>Lien expiré</h1>
+                    <p>Ce lien de partage a atteint sa limite d'utilisation.</p>
+                </body>
+            </html>
+        """, status_code=410)
+    
+    # Redirect to OHIF with study and token for Authorization Plugin
+    base_url = get_base_url(request)
+    # Add cache-busting parameter to force config reload
+    cache_bust = int(time.time())
+    # URL encode the study UID to handle any special characters
+    import urllib.parse
+    study_uid_encoded = urllib.parse.quote(study_uid, safe='')
+    ohif_url = f"{base_url}/ohif/viewer?StudyInstanceUIDs={study_uid_encoded}&token={token}&_cb={cache_bust}"
+    
+    return HTMLResponse(content=f"""
+        <html>
+            <head>
+                <title>Redirection vers OHIF</title>
+                <meta http-equiv="refresh" content="0; url={ohif_url}">
+                <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+                <style>
+                    body {{ font-family: Avenir, Helvetica, Arial, sans-serif; 
+                           background: #1e242a; color: #e0e0e0; text-align: center; padding: 50px; margin: 0;
+                           -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }}
+                    h1 {{ color: #6ea0c8; margin-bottom: 20px; }}
+                    p {{ color: #b0b0b0; }}
+                    a {{ color: #6ea0c8; text-decoration: none; }}
+                    a:hover {{ text-decoration: underline; }}
+                    .icon {{ font-size: 1.2em; margin-right: 8px; }}
+                </style>
+            </head>
+            <body>
+                <h1><i class="fas fa-spinner fa-pulse icon"></i>Redirection...</h1>
+                <p>Redirection vers l'étude...</p>
+                <p><a href="{ohif_url}">Cliquer ici si la redirection ne fonctionne pas</a></p>
+            </body>
+        </html>
+    """)
 
 @app.get("/health")
 def health_check():
