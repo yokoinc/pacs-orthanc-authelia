@@ -138,13 +138,20 @@ services:
     container_name: pax-nginx
     restart: unless-stopped
     ports:
-      - "${NGINX_EXTERNAL_PORT}:80"                     # External port for PACS access
+      - "${NGINX_HTTP_PORT:-${NGINX_EXTERNAL_PORT:-30080}}:80"     # HTTP port
+      - "${NGINX_HTTPS_PORT:-}:443"                                 # HTTPS port (empty if SSL disabled)
     volumes:
-      - ./services/reverse-proxy/nginx.conf:/etc/nginx/nginx.conf:ro           # Main proxy configuration
-      - ./services/reverse-proxy/conf.d:/etc/nginx/conf.d:ro                   # Additional configurations
+      - ./services/reverse-proxy/${NGINX_CONFIG:-nginx.conf}:/etc/nginx/nginx.conf:ro  # Config file based on SSL mode
+      - ./services/reverse-proxy/conf.d:/etc/nginx/conf.d:ro                           # Additional configurations
+      - ${SSL_CERT_PATH:-/dev/null}:/etc/nginx/ssl/cert.pem:ro                         # SSL certificate (optional)
+      - ${SSL_KEY_PATH:-/dev/null}:/etc/nginx/ssl/key.pem:ro                           # SSL private key (optional)
+    environment:
+      - SSL_ENABLED=${SSL_ENABLED:-false}                           # Enable/disable SSL mode
     depends_on:
-      - orthanc                         # PACS server
-      - ohif                            # OHIF viewer
+      - authelia                        # Authentication service
+      - orthanc                         # PACS core service
+      - ohif                            # Medical imaging viewer
+      - auth-service                    # Token management
     networks:
       - pax-network
 

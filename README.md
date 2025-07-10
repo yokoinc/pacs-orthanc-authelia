@@ -11,7 +11,7 @@
 - [Système de partage de liens](#système-de-partage-de-liens)
 - [Schéma des routes](#schéma-des-routes)
 - [Installation et configuration](#installation-et-configuration)
-- [Variables d'environnement](#variables-denvironnement)
+- [Gestion des utilisateurs](#gestion-des-utilisateurs)
 - [Gestion des tokens](#gestion-des-tokens)
 - [Justifications techniques](#justifications-techniques)
 - [Crédits et remerciements](#crédits-et-remerciements)
@@ -247,6 +247,65 @@ docker-compose ps
 ### Important
 
 **Tout changement sur les variables d'environnement nécessite un `docker-compose restart` complet (pas seulement `restart`).**
+
+## Gestion des utilisateurs
+
+### Script de gestion automatisé
+
+Le système inclut un script Python pour gérer facilement les utilisateurs Authelia :
+
+```bash
+# Initialiser avec des utilisateurs par défaut
+python3 services/authelia/scripts/manage_users.py init
+
+# Ajouter un nouvel utilisateur
+python3 services/authelia/scripts/manage_users.py add doctor@hopital.fr password123 \
+    --name "Dr. Martin" --groups doctor
+
+# Lister tous les utilisateurs
+python3 services/authelia/scripts/manage_users.py list
+
+# Changer un mot de passe
+python3 services/authelia/scripts/manage_users.py password doctor@hopital.fr nouveaumotdepasse
+
+# Supprimer un utilisateur
+python3 services/authelia/scripts/manage_users.py delete doctor@hopital.fr
+```
+
+### Groupes d'utilisateurs disponibles
+
+| Groupe | Accès | Description |
+|--------|-------|-------------|
+| `admin` | **Complet** | Administration PACS, gestion tokens, accès total |
+| `doctor` | **Médical** | Visualisation, upload DICOM, création tokens |
+| `external` | **Lecture seule** | Visualisation limitée via tokens uniquement |
+
+### Utilisateurs par défaut (après init)
+
+```bash
+# Créés automatiquement avec le script init
+admin@example.com    / admin123    (groupe: admin)
+doctor@example.com   / doctor123   (groupe: doctor) 
+external@example.com / external123 (groupe: external)
+```
+
+**⚠️ Important :** Changez les mots de passe par défaut en production !
+
+### Gestion manuelle (alternative)
+
+Si vous préférez modifier directement le fichier YAML :
+
+```yaml
+# services/authelia/config/users_database.yml
+users:
+  nouveau@hopital.fr:
+    displayname: "Nouvel Utilisateur"
+    password: "$argon2id$v=19$m=128,t=1,p=8$..."  # Hash généré
+    email: "nouveau@hopital.fr"
+    groups: ["doctor"]
+```
+
+**Note :** Les mots de passe doivent être hashés en Argon2ID. Utilisez le script pour éviter les erreurs.
 
 ## Gestion des tokens
 

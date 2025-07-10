@@ -46,7 +46,7 @@ window.config = {
     defaultLanguage: 'fr',                     // Default language: French
     languages: ['fr', 'en'],                   // Available languages: French, English
     debug: false,                              // Set to true for debugging missing translation keys
-    detectLanguage: false                      // Don't auto-detect browser language
+    detectLanguage: true                       // Don't auto-detect browser language
   },
 
   // =============================================================================
@@ -64,7 +64,7 @@ window.config = {
         // =============================================================================
         // ORTHANC SERVER INTEGRATION
         // =============================================================================
-        friendlyName: 'Orthanc Server',       // Display name for the PACS server
+        friendlyName: 'Pax-Orthanc',          // Display name for the PACS server
         name: 'Orthanc',                      // Internal server name
         
         // =============================================================================
@@ -78,14 +78,14 @@ window.config = {
         // =============================================================================
         // DICOMWEB PROTOCOL SETTINGS
         // =============================================================================
-        qidoSupportsIncludeField: false,     // Orthanc doesn't support includeField parameter
+        qidoSupportsIncludeField: false,      // Orthanc doesn't support includeField parameter
         imageRendering: 'wadors',             // Use WADO-RS for image rendering
         thumbnailRendering: 'wadors',         // Use WADO-RS for thumbnail rendering
         
         // =============================================================================
         // UPLOAD & MULTIPART SETTINGS
         // =============================================================================
-        dicomUploadEnabled: true,             // Enable DICOM file upload to PACS
+        dicomUploadEnabled: true,               // Enable DICOM file upload to PACS
         omitQuotationForMultipartRequest: true, // Orthanc compatibility for multipart requests
         
       },
