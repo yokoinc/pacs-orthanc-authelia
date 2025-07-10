@@ -104,7 +104,7 @@ session:
   remember_me: 8h                  # "Remember me" duration
   # IMPORTANT: Generate a secure random string of at least 64 characters
   # Example command: openssl rand -base64 48
-  secret: "very_important_secret_please_change_this_value_in_production_abcdefghijklmnopqrstuvwxyz0123456789"
+  secret: ${AUTHELIA_SESSION_SECRET}  # CRITICAL: Set this environment variable!
   
   cookies:
     - domain: pacs.example.com     # Domain for session cookies
@@ -134,7 +134,7 @@ regulation:
 storage:
   # IMPORTANT: Generate a secure random string of at least 64 characters
   # Example command: openssl rand -base64 48
-  encryption_key: "very_important_encryption_key_please_change_this_value_in_production_abcdefghijklmnopqrstuvwxyz0123456789"
+  encryption_key: ${AUTHELIA_STORAGE_ENCRYPTION_KEY}  # CRITICAL: Set this environment variable!
   local:
     path: /config/db.sqlite3       # SQLite database file location
 
@@ -146,7 +146,7 @@ identity_validation:
   reset_password:
     # IMPORTANT: Generate a secure random string of at least 64 characters
     # Example command: openssl rand -base64 48
-    jwt_secret: "very_important_jwt_secret_please_change_this_value_in_production_abcdefghijklmnopqrstuvwxyz0123456789"
+    jwt_secret: ${AUTHELIA_JWT_SECRET}  # CRITICAL: Set this environment variable!
 
 # =============================================================================
 # NOTIFICATION SYSTEM

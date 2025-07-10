@@ -19,14 +19,14 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data  # Persistent database storage
     networks:
-      - pax-ma-stack
+      - pax-network
 
   redis:
     image: redis:alpine
     container_name: pax-redis
     restart: unless-stopped
     networks:
-      - pax-ma-stack                 # Session storage for Authelia
+      - pax-network                 # Session storage for Authelia
 
   # =============================================================================
   # AUTHENTICATION SERVICES
@@ -73,7 +73,7 @@ services:
       - ./services/auth-service/static:/app/static:ro  # Mount static files
       - ./services/auth-service/templates:/app/templates:ro  # Mount templates
     networks:
-      - pax-ma-stack                 # Custom authentication service
+      - pax-network                 # Custom authentication service
 
   authelia:
     image: authelia/authelia:4.38.8
@@ -84,9 +84,17 @@ services:
     volumes:
       - ./services/authelia/config:/config  # Configuration and user database
     networks:
-      - pax-ma-stack
+      - pax-network
     environment:
-      - TZ=${TZ}                 # Timezone for session management
+      - TZ=${TZ}                          # Timezone for session management
+      - AUTHELIA_SESSION_SECRET=${AUTHELIA_SESSION_SECRET}
+      - AUTHELIA_STORAGE_ENCRYPTION_KEY=${AUTHELIA_STORAGE_ENCRYPTION_KEY}
+      - AUTHELIA_JWT_SECRET=${AUTHELIA_JWT_SECRET}
+      - AUTHELIA_DOMAIN=${AUTHELIA_DOMAIN:-pacs.example.com}
+      - AUTHELIA_LOG_LEVEL=${AUTHELIA_LOG_LEVEL:-info}
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - REDIS_DB=${REDIS_DB:-0}
 
   # =============================================================================
   # PACS CORE SERVICES
@@ -103,7 +111,7 @@ services:
       - ./services/orthanc/config/orthanc.json:/etc/orthanc/orthanc.json:ro  # PACS configuration
       - ./services/orthanc/plugins:/var/lib/orthanc/plugins:ro  # Custom plugins directory
     networks:
-      - pax-ma-stack
+      - pax-network
 
   # =============================================================================
   # MEDICAL IMAGING VIEWERS
@@ -119,7 +127,7 @@ services:
     volumes:
       - ./services/ohif/config/app-config.js:/usr/share/nginx/html/ohif/app-config.js:ro  # OHIF configuration
     networks:
-      - pax-ma-stack
+      - pax-network
 
   # =============================================================================
   # REVERSE PROXY & LOAD BALANCER
@@ -138,7 +146,7 @@ services:
       - orthanc                         # PACS server
       - ohif                            # OHIF viewer
     networks:
-      - pax-ma-stack
+      - pax-network
 
 # =============================================================================
 # PERSISTENT STORAGE
@@ -152,5 +160,5 @@ volumes:
 # =============================================================================
 
 networks:
-  pax-ma-stack:
+  pax-network:
     driver: bridge                      # Internal network for service communication
