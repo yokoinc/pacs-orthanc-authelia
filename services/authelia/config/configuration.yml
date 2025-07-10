@@ -70,7 +70,7 @@ access_control:
   
   rules:
     # Share links with tokens - bypass authentication for specific paths
-    - domain: pacs.yokoinc.ovh
+    - domain: pacs.example.com
       policy: bypass                # Allow without authentication
       resources:
         - "^/dicom-web.*token=.*$"  # DICOM-Web API with token
@@ -78,17 +78,17 @@ access_control:
         - "^/ohif.*token=.*$"       # OHIF with token
       
     # Administrators - Full access to all PACS functions
-    - domain: pacs.yokoinc.ovh
+    - domain: pacs.example.com
       policy: one_factor            # Require authentication (1FA)
       subject: "group:admin"
       
     # Medical doctors - Standard medical access
-    - domain: pacs.yokoinc.ovh
+    - domain: pacs.example.com
       policy: one_factor
       subject: "group:doctor"
       
     # External users - Limited read-only access
-    - domain: pacs.yokoinc.ovh
+    - domain: pacs.example.com
       policy: one_factor
       subject: "group:external"
 
@@ -105,9 +105,9 @@ session:
   secret: "another_very_important_secret_for_sessions_123456789"  # Change in production!
   
   cookies:
-    - domain: pacs.yokoinc.ovh     # Domain for session cookies
-      authelia_url: https://pacs.yokoinc.ovh/auth  # Authelia login URL
-      default_redirection_url: https://pacs.yokoinc.ovh/  # Default redirect after login
+    - domain: pacs.example.com     # Domain for session cookies
+      authelia_url: https://pacs.example.com/auth  # Authelia login URL
+      default_redirection_url: https://pacs.example.com/  # Default redirect after login
       same_site: lax               # Cookie same-site policy
   
   # Redis backend for session storage (scales better than file storage)
