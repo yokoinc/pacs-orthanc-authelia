@@ -479,7 +479,18 @@ curl http://localhost/share/TOKEN_ID
 - **Authelia** : Apache License 2.0
 - **PAX-MA-STACK** : MIT License
 
-### Inspiration et documentation
+### Sources officielles et documentation
+
+**Orthanc - Sources officielles :**
+- **Site officiel** : [orthanc-server.com](https://www.orthanc-server.com/)
+- **Documentation complète** : [Orthanc Book](https://orthanc.uclouvain.be/book/index.html)
+- **Dépôts Mercurial officiels** : [hg.orthanc-server.com](https://hg.orthanc-server.com/)
+- **GitHub OrthancTeam** : [github.com/orthanc-team](https://github.com/orthanc-team)
+- **GitHub OrthancServer** : [github.com/orthanc-server](https://github.com/orthanc-server)
+
+**Autres sources :**
+- **OHIF** : [ohif.org](https://ohif.org/) - Visualiseur médical open source
+- **Authelia** : [authelia.com](https://authelia.com/) - Solution d'authentification
 
 Ce projet s'inspire des bonnes pratiques et de la documentation officielle d'Orthanc, sans reprendre directement le code source. L'architecture d'authentification et d'autorisation a été conçue en étudiant les mécanismes internes d'Orthanc et en adaptant les solutions aux besoins spécifiques des infrastructures de petite et moyenne taille.
 
@@ -491,9 +502,8 @@ MIT License - Voir le fichier `LICENSE` pour plus de détails.
 
 ## Support et contribution
 
-- **Issues** : [GitHub Issues](https://github.com/votre-repo/pax-ma-stack/issues)
-- **Discussions** : [GitHub Discussions](https://github.com/votre-repo/pax-ma-stack/discussions)
-- **Documentation** : [Wiki du projet](https://github.com/votre-repo/pax-ma-stack/wiki)
+- **Issues** : [GitHub Issues](https://github.com/yokoinc/pacs-orthanc-authelia/issues)
+- **Discussions** : [GitHub Discussions](https://github.com/yokoinc/pacs-orthanc-authelia/discussions)
 
 ---
 
