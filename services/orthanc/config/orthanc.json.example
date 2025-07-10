@@ -1,6 +1,6 @@
 {
   // =============================================================================
-  // ORTHANC PACS CONFIGURATION FOR PAX-MA-STACK
+  // ORTHANC PACS CONFIGURATION FOR PAX-ORTHANC
   // =============================================================================
   // Central configuration for Orthanc PACS server with PostgreSQL storage
   // Integrated with OHIF viewer and Authelia authentication

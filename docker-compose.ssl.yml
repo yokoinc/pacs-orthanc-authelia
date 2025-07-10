@@ -1,0 +1,30 @@
+# =============================================================================
+# PAX-ORTHANC - SSL/HTTPS Configuration Override
+# =============================================================================
+# This compose file provides SSL termination directly on nginx
+# Use this instead of Cloudflare tunnel for self-hosted SSL certificates
+#
+# Usage:
+#   docker-compose -f docker-compose.yml -f docker-compose.ssl.yml up -d
+#
+# Requirements:
+# 1. SSL certificates in ./ssl/ directory
+# 2. Update .env with SSL_* variables
+# 3. DNS pointing to your server's public IP
+# =============================================================================
+
+version: '3.8'
+
+services:
+  nginx:
+    ports:
+      - "${NGINX_HTTP_PORT:-80}:80"           # HTTP (redirects to HTTPS)
+      - "${NGINX_HTTPS_PORT:-443}:443"        # HTTPS
+    volumes:
+      # SSL certificates
+      - ${SSL_CERT_PATH}:/etc/nginx/ssl/cert.pem:ro
+      - ${SSL_KEY_PATH}:/etc/nginx/ssl/key.pem:ro
+      # SSL-enabled nginx configuration
+      - ./services/reverse-proxy/nginx.ssl.conf:/etc/nginx/nginx.conf:ro
+    environment:
+      - SSL_ENABLED=true
