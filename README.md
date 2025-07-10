@@ -1,10 +1,10 @@
-# PAX-MA-STACK
+# PAX-ORTHANC
 
 ## Solution PACS complète avec authentification multi-niveaux
 
-**PAX-MA-STACK** est une solution PACS (Picture Archiving and Communication System) conteneurisée, conçue pour les infrastructures de petite à moyenne taille. Cette solution propose une alternative légère à Keycloak, optimisée pour les NAS d'entreprise et les déploiements simplifiés.
+**PAX-ORTHANC ** est une solution PACS (Picture Archiving and Communication System) conteneurisée, conçue pour les infrastructures de petite à moyenne taille.
 
-## 📋 Table des matières
+## Table des matières
 
 - [Architecture technique](#architecture-technique)
 - [Sécurité multi-niveaux](#sécurité-multi-niveaux)
@@ -16,26 +16,26 @@
 - [Justifications techniques](#justifications-techniques)
 - [Crédits et remerciements](#crédits-et-remerciements)
 
-## 🏗️ Architecture technique
+## Architecture technique
 
 ### Stack technologique
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                        PAX-MA-STACK                                 │
-├─────────────────────────────────────────────────────────────────────┤
-│  nginx (Reverse Proxy)                                             │
-├─────────────────────────────────────────────────────────────────────┤
-│  ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐       │
-│  │   Authelia      │ │  Auth-Service   │ │   Orthanc       │       │
-│  │ (Auth primaire) │ │ (Token manager) │ │ (PACS server)   │       │
-│  └─────────────────┘ └─────────────────┘ └─────────────────┘       │
-├─────────────────────────────────────────────────────────────────────┤
-│  ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐       │
-│  │   PostgreSQL    │ │     Redis       │ │   OHIF Viewer   │       │
-│  │   (Database)    │ │   (Sessions)    │ │   (Interface)   │       │
-│  └─────────────────┘ └─────────────────┘ └─────────────────┘       │
-└─────────────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────┐
+│                         PAX-ORTHANC                           │
+├───────────────────────────────────────────────────────────────┤
+│  nginx (Reverse Proxy)                                        │
+├───────────────────────────────────────────────────────────────┤
+│  ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐  │
+│  │ Authelia        │ │ Auth-Service    │ │ Orthanc         │  │
+│  │ (Auth primaire) │ │ (Token manager) │ │ (PACS server)   │  │
+│  └─────────────────┘ └─────────────────┘ └─────────────────┘  │
+├───────────────────────────────────────────────────────────────┤
+│  ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐  │
+│  │ PostgreSQL      │ │ Redis           │ │ OHIF Viewer     │  │
+│  │ (Database)      │ │ (Sessions)      │ │ (Interface)     │  │
+│  └─────────────────┘ └─────────────────┘ └─────────────────┘  │
+└───────────────────────────────────────────────────────────────┘
 ```
 
 ### Services conteneurisés
@@ -43,47 +43,50 @@
 | Service | Container | Port | Description |
 |---------|-----------|------|-------------|
 | **nginx** | `pax-nginx` | 80 | Reverse proxy principal |
-| **orthanc** | `pax-orthanc` | 8042 | Serveur PACS et API DICOM |
-| **ohif** | `pax-ohif` | 8080 | Visualiseur d'images médicales |
-| **authelia** | `pax-authelia` | 9091 | Authentification et autorisation |
-| **auth-service** | `pax-auth-service` | 8000 | Gestion avancée des tokens |
-| **postgres** | `pax-postgres` | 5432 | Base de données principale |
-| **redis** | `pax-redis` | 6379 | Cache et stockage des sessions |
+| **orthanc** | `pax-orthanc` | 8042* | Serveur PACS et API DICOM |
+| **ohif** | `pax-ohif` | 8080* | Visualiseur d'images médicales |
+| **authelia** | `pax-authelia` | 9091* | Authentification et autorisation |
+| **auth-service** | `pax-auth-service` | 8000* | Gestion avancée des tokens |
+| **postgres** | `pax-postgres` | 5432* | Base de données principale |
+| **redis** | `pax-redis` | 6379* | Cache et stockage des sessions |
+
+* Port non exposé en externe
 
 ### Réseau Docker
 
-**Réseau bridge** : `pax-ma-stack`  
+**Réseau bridge** : `pax-network`  
 Tous les services communiquent via ce réseau interne sécurisé.
+Port nginx, seul port exposé en externe
 
-## 🔐 Sécurité multi-niveaux
+## Sécurité multi-niveaux
 
 ### Architecture de sécurité à 3 niveaux
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                     FLUX D'AUTHENTIFICATION                        │
+│                      FLUX D'AUTHENTIFICATION                        │
 ├─────────────────────────────────────────────────────────────────────┤
-│  Utilisateur                                                        │
+│   Utilisateur                                                       │
 │      ↓                                                              │
 │  ┌─────────────────┐                                                │
-│  │   NIVEAU 1      │  Authelia (Authentification primaire)         │
-│  │   Authelia      │  • Vérification utilisateur/mot de passe      │
-│  │                 │  • Gestion des sessions                        │
-│  └─────────────────┘                                                │
+│  │   NIVEAU 1      │  Authelia (Authentification primaire)          │
+│  │   Authelia      │  • Vérification utilisateur/mot de passe       │
+│  │                 │  • Gestion des sessions/expiration             │
+│  └─────────────────┘  • Attribution des rôles (admin/doctor ...)    │
 │      ↓                                                              │
 │  ┌─────────────────┐                                                │
-│  │   NIVEAU 2      │  Service d'authentification personnalisé      │
-│  │  Auth-Service   │  • Génération de tokens                       │
-│  │                 │  • Gestion des permissions                     │
-│  └─────────────────┘                                                │
+│  │  NIVEAU 2       │  Service d'authentification personnalisé       │
+│  │  Auth-Service   │  • Génération de tokens/partage externe study  │
+│  │                 │  • Definiton permissions des roles / orthanc   │ 
+│  └─────────────────┘                                    & explorer  │
 │      ↓                                                              │
 │  ┌─────────────────┐                                                │
-│  │   NIVEAU 3      │  Plugin d'autorisation Orthanc                │
-│  │  Orthanc Auth   │  • Contrôle d'accès granulaire                │
-│  │                 │  • Validation des requêtes DICOM              │
+│  │  NIVEAU 3       │  Plugin d'autorisation Orthanc                 │
+│  │  Orthanc Auth   │  • Contrôle d'accès granulaire                 │
+│  │                 │  • Validation des requêtes DICOM               │
 │  └─────────────────┘                                                │
 │      ↓                                                              │
-│  Accès aux données DICOM                                            │
+│   Accès aux données DICOM                                           │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -93,50 +96,50 @@ Tous les services communiquent via ce réseau interne sécurisé.
 map $groups $auth_token {
     ~admin    "admin-token";        # Accès complet administrateur
     ~doctor   "doctor-token";       # Accès médical pour docteurs
-    ~external "external-token";    # Accès limité utilisateurs externes
+    ~external "external-token";     # Accès limité utilisateurs externes
     default   "";                   # Aucun accès par défaut
 }
 ```
 
-## 🔗 Système de partage de liens
+## Système de partage de liens
 
 ### Fonctionnalités du système de tokens
 
-- **Limitation d'usage** : Maximum 50 utilisations par token
-- **Durée de vie configurable** : Expiration paramétrable
-- **Révocation instantanée** : Annulation en temps réel
-- **Journalisation complète** : Traçabilité des accès
-- **Interface de gestion** : Panel d'administration dédié
+- **Limitation d'usage** :             Maximum 50 utilisations par token (par défaut)
+- **Durée de vie configurable** :      Expiration paramétrable
+- **Révocation instantanée** :         Annulation en temps réel
+- **Journalisation complète** :        Traçabilité des accès
+- **Interface de gestion** :           Panel d'administration dédié
 
 ### Sécurité des liens externes
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                   FLUX DE PARTAGE SÉCURISÉ                         │
+│                      FLUX DE PARTAGE SÉCURISÉ                       │
 ├─────────────────────────────────────────────────────────────────────┤
-│  Utilisateur externe                                                │
+│   Utilisateur externe                                               │
 │      ↓                                                              │
 │  ┌─────────────────┐                                                │
 │  │  Vérification   │  • Validation du token                         │
-│  │     Token       │  • Vérification des utilisations restantes    │
+│  │  Token          │  • Vérification des utilisations restantes     │
 │  │                 │  • Contrôle de l'expiration                    │
 │  └─────────────────┘                                                │
 │      ↓                                                              │
 │  ┌─────────────────┐                                                │
-│  │   Filtrage      │  • Aucun accès direct au backend              │
-│  │    Nginx        │  • Limitation des endpoints                    │
-│  │                 │  • Journalisation des accès                   │
+│  │   Filtrage      │  • Aucun accès direct au backend               │
+│  │   Nginx         │  • Limitation des endpoints                    │
+│  │                 │  • Journalisation des accès                    │
 │  └─────────────────┘                                                │
 │      ↓                                                              │
 │  ┌─────────────────┐                                                │
-│  │  Accès limité   │  • Visualisation uniquement                   │
-│  │   aux études    │  • Pas d'accès aux API administratives        │
-│  │                 │  • Décompte des utilisations                  │
+│  │  Accès limité   │  • Visualisation uniquement                    │
+│  │  aux études     │  • Pas d'accès aux API administratives         │
+│  │                 │  • Décompte des utilisations                   │
 │  └─────────────────┘                                                │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-## 🛣️ Schéma des routes
+## Schéma des routes
 
 ### Routes publiques (sans authentification)
 
@@ -184,7 +187,7 @@ map $groups $auth_token {
 | `/api/` | `authelia:9091/api/` | API Authelia |
 | `/authelia/` | `authelia:9091/api/verify` | Vérification interne |
 
-## 🚀 Installation et configuration
+## Installation et configuration
 
 ### Prérequis
 
@@ -195,7 +198,7 @@ map $groups $auth_token {
 
 ### Variables d'environnement critiques
 
-Ces variables sont **essentielles** pour le fonctionnement du système :
+**Obligatoires** pour le fonctionnement du système :
 
 #### Configuration PostgreSQL
 ```env
@@ -212,14 +215,14 @@ AUTH_PASSWORD=changeme_in_production
 
 #### Configuration réseau
 ```env
-NGINX_EXTERNAL_PORT=80
+NGINX_EXTERNAL_PORT=30080
 OHIF_PUBLIC_URL=/ohif/
 OHIF_HTTPS=false
 ```
 
 #### Configuration du domaine
 ```env
-DOMAIN=votre-domaine.com
+DOMAIN=votre-domaine.com (seul un domaine ≠ localhost et déclaré en https fonctionnera)
 TZ=Europe/Paris
 ```
 
@@ -241,11 +244,11 @@ docker-compose up -d
 docker-compose ps
 ```
 
-### ⚠️ Important
+### Important
 
 **Tout changement sur les variables d'environnement nécessite un `docker-compose restart` complet (pas seulement `restart`).**
 
-## 🎯 Gestion des tokens
+## Gestion des tokens
 
 ### Manager de tokens intégré
 
@@ -261,7 +264,7 @@ Le système inclut un gestionnaire de tokens avancé accessible via `/auth/token
 #### Interface de gestion
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                    MANAGER DE TOKENS                               │
+│                    MANAGER DE TOKENS                                │
 ├─────────────────────────────────────────────────────────────────────┤
 │  Token ID    │  Utilisations  │  Expiration  │  Actions             │
 │  ─────────   │  ────────────  │  ──────────  │  ──────────          │
@@ -269,7 +272,7 @@ Le système inclut un gestionnaire de tokens avancé accessible via `/auth/token
 │  def456...   │  03/50         │  1h 45m      │  [Révoquer] [Stats]  │
 │  ghi789...   │  48/50         │  15m         │  [Révoquer] [Stats]  │
 ├─────────────────────────────────────────────────────────────────────┤
-│  [Créer nouveau token]  [Exporter logs]  [Purger expirés]          │
+│  [Créer nouveau token]  [Exporter logs]  [Purger expirés]           │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -343,7 +346,7 @@ Le système intègre des métriques pour :
 - Charge des services
 - Erreurs d'authentification
 
-## 🔍 Audit et conformité
+## Audit et conformité
 
 ### Journalisation complète
 
@@ -367,13 +370,13 @@ AUDIT_RETENTION_DAYS=90  # Rétention des logs d'audit
 - **Limitation** : Accès limité dans le temps
 - **Isolation** : Aucun accès direct au backend
 
-## 🛠️ Développement et contribution
+## Développement et contribution
 
 ### Structure du projet
 
 ```
 pax-ma-stack/
-├── docker-compose.yml          # Orchestration des services
+├── docker-compose.yml         # Orchestration des services
 ├── .env.example               # Variables d'environnement
 ├── .gitignore                 # Fichiers à exclure du versioning
 ├── services/
@@ -400,7 +403,7 @@ curl -H "Authorization: Bearer token" http://localhost/api/system
 curl http://localhost/share/TOKEN_ID
 ```
 
-## 🙏 Crédits et remerciements
+## Crédits et remerciements
 
 ### Remerciements principaux
 
@@ -423,11 +426,11 @@ Ce projet s'inspire des bonnes pratiques et de la documentation officielle d'Ort
 
 ---
 
-## 📄 Licence
+## Licence
 
 MIT License - Voir le fichier `LICENSE` pour plus de détails.
 
-## 🐛 Support et contribution
+## Support et contribution
 
 - **Issues** : [GitHub Issues](https://github.com/votre-repo/pax-ma-stack/issues)
 - **Discussions** : [GitHub Discussions](https://github.com/votre-repo/pax-ma-stack/discussions)
@@ -435,4 +438,4 @@ MIT License - Voir le fichier `LICENSE` pour plus de détails.
 
 ---
 
-*PAX-MA-STACK - Une solution PACS moderne, sécurisée et scalable pour les infrastructures médicales.*
+*PAX-ORTHANC - Une solution PACS moderne, sécurisée et scalable pour les infrastructures médicales.*
