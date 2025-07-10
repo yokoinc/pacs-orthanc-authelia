@@ -4,6 +4,10 @@
 // Configuration for OHIF v3.10.2 medical imaging viewer
 // Optimized for Orthanc PACS integration with French localization
 
+// Extract token from URL if present
+const urlParams = new URLSearchParams(window.location.search);
+const shareToken = urlParams.get('token');
+
 window.config = {
   // =============================================================================
   // ROUTING & UI CONFIGURATION
@@ -50,6 +54,7 @@ window.config = {
   // =============================================================================
   defaultDataSourceName: 'dicomweb',          // Default data source name
   
+  
   dataSources: [
     {
       // DICOMweb data source for Orthanc PACS integration
@@ -82,7 +87,46 @@ window.config = {
         // =============================================================================
         dicomUploadEnabled: true,             // Enable DICOM file upload to PACS
         omitQuotationForMultipartRequest: true, // Orthanc compatibility for multipart requests
+        
       },
     },
   ],
 };
+
+// Token injection script - runs after OHIF loads
+(function() {
+  // Wait for OHIF to load
+  if (typeof window !== 'undefined') {
+    const urlParams = new URLSearchParams(window.location.search);
+    const token = urlParams.get('token');
+    
+    if (token) {
+      // Override XMLHttpRequest to add token to all requests
+      const originalOpen = XMLHttpRequest.prototype.open;
+      XMLHttpRequest.prototype.open = function(method, url, async, user, password) {
+        // Add token to URL if it doesn't already have one
+        if (url && !url.includes('token=') && (url.includes('/dicom-web') || url.includes('/wado'))) {
+          // Handle relative URLs properly
+          if (url.startsWith('/dicom-web') || url.startsWith('/wado')) {
+            const separator = url.includes('?') ? '&' : '?';
+            url += separator + 'token=' + token;
+          }
+        }
+        return originalOpen.call(this, method, url, async, user, password);
+      };
+      
+      // Override fetch API as well
+      const originalFetch = window.fetch;
+      window.fetch = function(url, options) {
+        if (typeof url === 'string' && !url.includes('token=') && (url.includes('/dicom-web') || url.includes('/wado'))) {
+          // Handle relative URLs properly
+          if (url.startsWith('/dicom-web') || url.startsWith('/wado')) {
+            const separator = url.includes('?') ? '&' : '?';
+            url += separator + 'token=' + token;
+          }
+        }
+        return originalFetch.call(this, url, options);
+      };
+    }
+  }
+})();

@@ -180,19 +180,19 @@
     "WebServiceUsername": "share-user",                              // Service username
     "WebServicePassword": "change-me",                                // Service password (change in production)
     "StandardConfigurations": [
-      "orthanc-explorer-2",
       "ohif",
       "stone-webviewer",
-      "volview"
+      "volview",
+      "orthanc-explorer-2"
     ]
   },
 
   // =============================================================================
   // LOGGING & DEBUGGING CONFIGURATION
   // =============================================================================
-  "LogLevel": "trace",                         // Detailed logging for debugging
+  "LogLevel": "default",                       // Normal logging level
   "LogFile": "",                               // Log to stdout (Docker logs)
-  "HttpVerbose": true,                         // Verbose HTTP logging
+  "HttpVerbose": false,                        // Disable verbose HTTP logging
   "DicomVerbose": false,                       // Disable verbose DICOM logging (reduce noise)
 
   // =============================================================================

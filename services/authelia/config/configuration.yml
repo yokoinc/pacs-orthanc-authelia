@@ -26,7 +26,7 @@ server:
 # LOGGING CONFIGURATION
 # =============================================================================
 log:
-  level: debug                      # Log level: trace, debug, info, warn, error
+  level: info                       # Log level: trace, debug, info, warn, error
 
 # =============================================================================
 # TWO-FACTOR AUTHENTICATION (TOTP)
@@ -69,6 +69,14 @@ access_control:
   default_policy: deny              # Deny access by default (secure)
   
   rules:
+    # Share links with tokens - bypass authentication for specific paths
+    - domain: pacs.yokoinc.ovh
+      policy: bypass                # Allow without authentication
+      resources:
+        - "^/dicom-web.*token=.*$"  # DICOM-Web API with token
+        - "^/wado.*token=.*$"       # WADO API with token
+        - "^/ohif.*token=.*$"       # OHIF with token
+      
     # Administrators - Full access to all PACS functions
     - domain: pacs.yokoinc.ovh
       policy: one_factor            # Require authentication (1FA)

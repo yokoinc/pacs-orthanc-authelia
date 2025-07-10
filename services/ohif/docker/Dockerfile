@@ -1,6 +1,5 @@
-# syntax=docker/dockerfile:1.7-labs
-# OHIF Viewer avec traductions françaises
-# Ce Dockerfile clone le repository OHIF Viewer et intègre les traductions personnalisées
+# OHIF Viewer - Builder
+# This Dockerfile clones the OHIF Viewer repository and integrates custom translations
 
 
 # Stage 1: Build the application
@@ -65,7 +64,7 @@ COPY --from=builder /usr/src/app/platform/app/dist /usr/share/nginx/html${PUBLIC
 # Copy paths that are renamed/redirected generally
 # Microscopy libraries depend on root level include, so must be copied
 RUN mkdir -p /usr/share/nginx/html${PUBLIC_URL}dicom-microscopy-viewer
-# copier le DMV sous le même préfixe PUBLIC_URL que le reste de l'application
+# Copy DMV with the same PUBLIC_URL prefix as the rest of the application
 COPY --from=builder /usr/src/app/platform/app/dist/dicom-microscopy-viewer /usr/share/nginx/html${PUBLIC_URL}dicom-microscopy-viewer
 
 

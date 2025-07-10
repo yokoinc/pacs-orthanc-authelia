@@ -1,0 +1,211 @@
+{
+  // =============================================================================
+  // ORTHANC PACS CONFIGURATION FOR PAX-MA-STACK
+  // =============================================================================
+  // Central configuration for Orthanc PACS server with PostgreSQL storage
+  // Integrated with OHIF viewer and Authelia authentication
+  
+  // =============================================================================
+  // SERVER IDENTIFICATION AND METADATA
+  // =============================================================================
+  
+  "Name": "PAX-MA-STACK Orthanc",
+  "Description": "Enterprise PACS with SSO Authentication",
+  
+  // =============================================================================
+  // DICOM NETWORK CONFIGURATION
+  // =============================================================================
+  
+  // AET (Application Entity Title) - unique identifier for this PACS in DICOM network
+  "DicomAet": "ORTHANC",
+  
+  // DICOM communication port (standard: 104, we use 4242 for easier deployment)
+  "DicomPort": 4242,
+  
+  // Maximum number of concurrent DICOM operations
+  "DicomScpMaximumPduLength": 16384,
+  "DicomScuTimeout": 10,
+  
+  // =============================================================================
+  // DATABASE CONFIGURATION
+  // =============================================================================
+  
+  // Enable PostgreSQL plugin for scalable storage
+  "Plugins": [
+    "/usr/share/orthanc/plugins"
+  ],
+  
+  // PostgreSQL connection settings
+  "PostgreSQL": {
+    "EnableIndex": true,
+    "EnableStorage": true,
+    "Host": "postgres",
+    "Port": 5432,
+    "Database": "orthanc",
+    "Username": "orthanc",
+    // IMPORTANT: Change this password in production!
+    "Password": "change_this_password_in_production",
+    "EnableSsl": false,
+    "MaximumConnectionRetries": 10,
+    "ConnectionRetryInterval": 5,
+    "IndexConnectionsCount": 10,
+    "EnableVerboseLogs": false
+  },
+  
+  // =============================================================================
+  // WEB SERVER CONFIGURATION
+  // =============================================================================
+  
+  // HTTP port for web interface and REST API
+  "HttpPort": 8042,
+  
+  // Enable plugins and advanced features
+  "HttpServerEnabled": true,
+  "HttpDescribeErrors": true,
+  "HttpCompressionEnabled": true,
+  
+  // =============================================================================
+  // SECURITY CONFIGURATION
+  // =============================================================================
+  
+  // Disable built-in authentication (handled by Authelia)
+  "AuthenticationEnabled": false,
+  "RegisteredUsers": {},
+  
+  // SSL is handled by nginx reverse proxy
+  "SslEnabled": false,
+  
+  // Security headers
+  "HttpsCACertificates": "",
+  "HttpsVerifyPeers": false,
+  
+  // =============================================================================
+  // DICOM WEB SUPPORT
+  // =============================================================================
+  
+  // Enable DICOMweb plugin for modern web-based DICOM access
+  "DicomWeb": {
+    "Enable": true,
+    "Root": "/dicom-web/",
+    "EnableWado": true,
+    "WadoRoot": "/wado/",
+    "Ssl": false,
+    "QidoCaseSensitive": false,
+    "Host": "0.0.0.0",
+    "StudiesMetadata": "Full",
+    "SeriesMetadata": "Full"
+  },
+  
+  // =============================================================================
+  // STORAGE CONFIGURATION
+  // =============================================================================
+  
+  // Store DICOM files in PostgreSQL (via plugin)
+  "StorageDirectory": "/var/lib/orthanc/db",
+  "IndexDirectory": "/var/lib/orthanc/db",
+  
+  // Storage compression
+  "StorageCompression": false,
+  
+  // Maximum storage size (0 = unlimited)
+  "MaximumStorageSize": 0,
+  "MaximumPatientCount": 0,
+  
+  // Stable study/series delay (in seconds)
+  "StableAge": 60,
+  
+  // =============================================================================
+  // IMAGE HANDLING
+  // =============================================================================
+  
+  // JPEG quality for preview images
+  "DicomWebJpegQuality": 90,
+  "HttpImageQuality": 90,
+  
+  // Inactivity timeout for DICOM connections
+  "DicomScpTimeout": 30,
+  
+  // =============================================================================
+  // LOGGING CONFIGURATION
+  // =============================================================================
+  
+  "HttpVerboseLogging": false,
+  "DicomVerboseLogging": false,
+  "StorageCommitmentReportsSize": 100,
+  
+  // =============================================================================
+  // JOB MANAGEMENT
+  // =============================================================================
+  
+  "JobsHistorySize": 10,
+  "ConcurrentJobs": 2,
+  
+  // =============================================================================
+  // ADVANCED FEATURES
+  // =============================================================================
+  
+  // Enable advanced REST API features
+  "RestApiEnabled": true,
+  
+  // Enable modifications and anonymization
+  "DicomModalities": {
+    // Example DICOM node configuration
+    // "scanner": ["SCANNER", "192.168.1.100", 104]
+  },
+  
+  // Enable DICOM TLS
+  "DicomTlsEnabled": false,
+  
+  // Web viewer settings
+  "WebViewer": {
+    "DefaultViewer": "ohif",
+    "PublicRoot": "/ohif/"
+  },
+  
+  // =============================================================================
+  // AUTHENTICATION INTEGRATION
+  // =============================================================================
+  
+  // External authentication via Authelia
+  "WebServiceRootUrl": "http://authelia:9091",
+  "WebServiceUsername": "authelia",
+  // IMPORTANT: Change this password in production and keep it synchronized with Authelia!
+  "WebServicePassword": "change_this_password_in_production",
+  
+  // Token validation endpoint
+  "WebServiceUserProfileUrl": "/api/user",
+  
+  // =============================================================================
+  // CORS CONFIGURATION
+  // =============================================================================
+  
+  // Enable CORS for OHIF viewer
+  "CorsEnabled": true,
+  "CorsAllowOrigin": "*",
+  "CorsAllowHeaders": "*",
+  "CorsAllowMethods": "*",
+  "CorsAllowCredentials": true,
+  
+  // =============================================================================
+  // PERFORMANCE TUNING
+  // =============================================================================
+  
+  // Thread pool size for database operations
+  "DatabaseServerThreads": 10,
+  
+  // Cache settings
+  "MediaCacheSize": 128,
+  
+  // Connection limits
+  "HttpRequestTimeout": 30,
+  
+  // =============================================================================
+  // ANONYMIZATION AND PRIVACY
+  // =============================================================================
+  
+  "DicomAlwaysAllowEcho": true,
+  "DicomAlwaysAllowStore": true,
+  "DicomCheckCalledAet": false,
+  "DefaultEncoding": "Latin1",
+  "DeidentifyLogs": true
+}
